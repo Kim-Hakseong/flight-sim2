@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Flight Sim — MVP</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+    #c { display: block; width: 100vw; height: 100vh; }
+
+    /* Military HUD: amber monochrome, monospace. */
+    #hud {
+      position: fixed; inset: 0; pointer-events: none;
+      color: #ffb000; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 14px; text-shadow: 0 0 6px rgba(255,176,0,0.6);
+      z-index: 10;
+    }
+    .hud-tape {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 110px; padding: 6px 8px;
+      border: 1px solid #ffb000; background: rgba(0,0,0,0.25);
+    }
+    #hud-speed { left: 24px; }
+    #hud-alt   { right: 24px; text-align: right; }
+    .hud-tape .label { font-size: 10px; opacity: 0.8; letter-spacing: 1px; }
+    .hud-tape .value { font-size: 28px; font-weight: 700; }
+    .hud-tape .unit  { font-size: 10px; opacity: 0.7; }
+
+    #hud-heading {
+      position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+      padding: 4px 14px; border: 1px solid #ffb000; background: rgba(0,0,0,0.3);
+      letter-spacing: 2px;
+    }
+
+    #hud-bottom {
+      position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+      display: grid; grid-template-columns: repeat(5, auto); gap: 0;
+      border: 1px solid #ffb000; background: rgba(0,0,0,0.3);
+    }
+    #hud-bottom .cell {
+      padding: 6px 14px; min-width: 80px; text-align: center;
+      border-right: 1px solid rgba(255,176,0,0.5);
+    }
+    #hud-bottom .cell:last-child { border-right: none; }
+    #hud-bottom .label { display: block; font-size: 10px; opacity: 0.8; }
+    #hud-bottom .value { display: block; font-size: 16px; font-weight: 700; }
+    #hud-bottom .cell.warn .value { color: #ff5050; text-shadow: 0 0 8px #ff0000; }
+    #hud-bottom .cell.auto .value { color: #6fff6f; text-shadow: 0 0 8px #6fff6f; }
+
+    /* Crosshair + pitch ladder canvas overlay. */
+    #hud-overlay {
+      position: absolute; left: 50%; top: 50%;
+      width: 480px; height: 320px; transform: translate(-50%, -50%);
+    }
+
+    #hud-help {
+      position: absolute; bottom: 18px; left: 18px;
+      font-size: 11px; opacity: 0.7; line-height: 1.5;
+      max-width: 280px; border: 1px solid rgba(255,176,0,0.4);
+      padding: 6px 10px; background: rgba(0,0,0,0.25);
+    }
+
+    #hud-qgc {
+      position: absolute; top: 18px; right: 18px;
+      padding: 4px 10px; font-size: 11px; letter-spacing: 1px;
+      border: 1px solid rgba(255,176,0,0.5); background: rgba(0,0,0,0.3);
+    }
+    #hud-qgc.online { color: #6fff6f; border-color: #6fff6f; text-shadow: 0 0 6px #6fff6f; }
+    #hud-qgc.offline { color: #ff8080; border-color: rgba(255,128,128,0.4); }
+
+    #hud-damage {
+      position: absolute; top: 60px; right: 18px;
+      width: 130px; padding: 6px 8px;
+      border: 1px solid #ffb000; background: rgba(0,0,0,0.3);
+      font-size: 10px; letter-spacing: 1px;
+    }
+
+    #hud-rec, #hud-replay, #hud-hitl {
+      position: absolute; left: 18px; padding: 4px 10px;
+      font-size: 11px; letter-spacing: 2px;
+      border: 1px solid currentColor; background: rgba(0,0,0,0.4);
+    }
+    #hud-rec    { top: 18px; color: #ff5050; text-shadow: 0 0 8px #ff0000; }
+    #hud-rec::before { content: '● '; }
+    #hud-rec.hidden    { display: none; }
+    #hud-replay { top: 50px; color: #6fa8ff; text-shadow: 0 0 6px #4a90ff; }
+    #hud-replay.hidden { display: none; }
+    #hud-hitl   { top: 82px; color: #ffaa40; text-shadow: 0 0 6px #ff8800; }
+    #hud-hitl.hidden   { display: none; }
+    #hud-pad    { top: 114px; color: #6fff6f; text-shadow: 0 0 6px #00ff88; }
+    #hud-pad.hidden    { display: none; }
+    #hud-mute   { top: 146px; color: #888; }
+    #hud-mute.hidden   { display: none; }
+
+    #hud-scenario {
+      position: absolute; bottom: 100px; left: 18px; max-width: 280px;
+      padding: 8px 10px; border: 1px solid #ffb000; background: rgba(0,0,0,0.45);
+      font-size: 11px; letter-spacing: 1px;
+    }
+    #hud-scenario.hidden { display: none; }
+    #hud-scenario .title { color: #ffd060; font-weight: 700; margin-bottom: 4px; }
+    #hud-scenario .obj   { opacity: 0.85; }
+    #hud-scenario .score { margin-top: 4px; color: #6fff6f; font-weight: 700; }
+
+    #hud-mp { top: 178px; left: 18px; position: absolute;
+      padding: 4px 10px; font-size: 11px; letter-spacing: 1px;
+      color: #aac8ff; border: 1px solid #aac8ff; background: rgba(0,0,0,0.4); }
+    #hud-mp.hidden { display: none; }
+    #hud-damage .label { display: block; opacity: 0.75; margin-bottom: 4px; }
+    #hud-damage .row { display: grid; grid-template-columns: 50px 1fr; gap: 4px; align-items: center; margin: 2px 0; font-size: 9px; }
+    #hud-damage .bar { position: relative; height: 6px; background: rgba(255,176,0,0.15); border: 1px solid rgba(255,176,0,0.5); }
+    #hud-damage .fill { position: absolute; left: 0; top: 0; bottom: 0; background: #6fff6f; transition: background 0.2s; }
+    #hud-damage .fill.warn   { background: #ffd060; }
+    #hud-damage .fill.danger { background: #ff5050; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div id="hud">
+    <div class="hud-tape" id="hud-speed">
+      <div class="label">IAS</div>
+      <div><span class="value" id="v-speed">0</span> <span class="unit">m/s</span></div>
+      <div class="label" style="margin-top:4px">AOA</div>
+      <div><span class="value" id="v-aoa" style="font-size:18px">0.0</span> <span class="unit">°</span></div>
+    </div>
+
+    <div class="hud-tape" id="hud-alt">
+      <div class="label">ALT</div>
+      <div><span class="value" id="v-alt">0</span> <span class="unit">m</span></div>
+      <div class="label" style="margin-top:4px">VSI</div>
+      <div><span class="value" id="v-vsi" style="font-size:18px">0.0</span> <span class="unit">m/s</span></div>
+    </div>
+
+    <div id="hud-heading">HDG <span id="v-hdg">000</span></div>
+
+    <canvas id="hud-overlay" width="480" height="320"></canvas>
+
+    <div id="hud-bottom">
+      <div class="cell"><span class="label">THR</span><span class="value" id="v-thr">0%</span></div>
+      <div class="cell"><span class="label">G</span><span class="value" id="v-g">1.00</span></div>
+      <div class="cell"><span class="label">PITCH</span><span class="value" id="v-pitch">0</span></div>
+      <div class="cell"><span class="label">ROLL</span><span class="value" id="v-roll">0</span></div>
+      <div class="cell" id="cell-mode"><span class="label">MODE</span><span class="value" id="v-mode">MANUAL</span></div>
+      <div class="cell" id="cell-wp"><span class="label">WP</span><span class="value" id="v-wp">—</span></div>
+      <div class="cell" id="cell-status"><span class="label">STATUS</span><span class="value" id="v-status">OK</span></div>
+    </div>
+
+    <div id="hud-help">
+      W/S pitch · A/D roll · Q/E yaw · ↑/↓ throttle<br>
+      R reset · V camera · P pause<br>
+      M start mission · N abort autopilot<br>
+      F record · L replay · Y export CSV · H HITL · X mute<br>
+      Z plane↔drone · T scenario cycle · G start · J multiplayer
+    </div>
+
+    <div id="hud-scenario" class="hidden">
+      <div class="title" id="sc-name">—</div>
+      <div class="obj"  id="sc-obj">—</div>
+      <div class="score" id="sc-score">0</div>
+    </div>
+
+    <div id="hud-mp" class="hidden">MP <span id="mp-count">0</span></div>
+
+    <div id="hud-rec" class="hidden">REC</div>
+    <div id="hud-replay" class="hidden">REPLAY</div>
+    <div id="hud-hitl" class="hidden">HITL</div>
+    <div id="hud-pad" class="hidden">PAD</div>
+    <div id="hud-mute" class="hidden">MUTE</div>
+
+    <div id="hud-qgc" class="offline">QGC OFFLINE</div>
+
+    <div id="hud-damage">
+      <span class="label">INTEGRITY</span>
+      <div class="row"><span>FUS</span><div class="bar"><div class="fill" id="dmg-fus"></div></div></div>
+      <div class="row"><span>L·WG</span><div class="bar"><div class="fill" id="dmg-lwg"></div></div></div>
+      <div class="row"><span>R·WG</span><div class="bar"><div class="fill" id="dmg-rwg"></div></div></div>
+      <div class="row"><span>TAIL</span><div class="bar"><div class="fill" id="dmg-tail"></div></div></div>
+      <div class="row"><span>ENG</span><div class="bar"><div class="fill" id="dmg-eng"></div></div></div>
+    </div>
+  </div>
+
+  <!-- Three.js r128 (CDN, fixed). -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

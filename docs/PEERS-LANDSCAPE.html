@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ko" xml:lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="리서치 기반 정리" />
+  <meta name="dcterms.date" content="2026-04-28" />
+  <title>우리 프로젝트의 경쟁/동료 지형</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="data:text/css;base64,QHBhZ2UgeyBzaXplOiBBNDsgbWFyZ2luOiAyMm1tIDE4bW0gMjJtbSAxOG1tOyB9CmJvZHkgewogIGZvbnQtZmFtaWx5OiAtYXBwbGUtc3lzdGVtLCAiQXBwbGVTREdvdGhpY05lby1SZWd1bGFyIiwgIkFwcGxlIFNEIEdvdGhpYyBOZW8iLAogICAgICAgICAgICAgICAiSGVsdmV0aWNhIE5ldWUiLCAiTm90byBTYW5zIENKSyBLUiIsIHNhbnMtc2VyaWY7CiAgZm9udC1zaXplOiAxMC4ycHQ7IGxpbmUtaGVpZ2h0OiAxLjU1OyBjb2xvcjogIzIyMjsKICBtYXgtd2lkdGg6IDc2MHB4OyBtYXJnaW46IDAgYXV0bzsKfQpoMSB7IGZvbnQtc2l6ZTogMTlwdDsgYm9yZGVyLWJvdHRvbTogMnB4IHNvbGlkICMzMzM7IHBhZGRpbmctYm90dG9tOiA2cHg7IG1hcmdpbi10b3A6IDI2cHQ7IHBhZ2UtYnJlYWstYmVmb3JlOiBhbHdheXM7IH0KaDE6Zmlyc3Qtb2YtdHlwZSB7IHBhZ2UtYnJlYWstYmVmb3JlOiBhdm9pZDsgfQpoMiB7IGZvbnQtc2l6ZTogMTRwdDsgbWFyZ2luLXRvcDogMThwdDsgY29sb3I6ICMxYTNkN2E7IGJvcmRlci1ib3R0b206IDFweCBzb2xpZCAjY2NkOyBwYWRkaW5nLWJvdHRvbTogM3B4OyB9CmgzIHsgZm9udC1zaXplOiAxMnB0OyBtYXJnaW4tdG9wOiAxNHB0OyBjb2xvcjogIzJhNWRhNjsgfQpoNCB7IGZvbnQtc2l6ZTogMTAuNXB0OyBtYXJnaW4tdG9wOiAxMHB0OyBjb2xvcjogIzQ0NDsgfQpwLCBsaSB7IGZvbnQtc2l6ZTogMTAuMnB0OyB9CmNvZGUgeyBmb250LWZhbWlseTogIlNGIE1vbm8iLCBNZW5sbywgbW9ub3NwYWNlOyBmb250LXNpemU6IDkuM3B0OwogICAgICAgYmFja2dyb3VuZDogI2YzZjNmMzsgcGFkZGluZzogMXB4IDRweDsgYm9yZGVyLXJhZGl1czogM3B4OyB9CnByZSAgeyBiYWNrZ3JvdW5kOiAjZjZmNmY2OyBib3JkZXItbGVmdDogM3B4IHNvbGlkICNhYWE7IHBhZGRpbmc6IDhweCAxMnB4OwogICAgICAgZm9udC1zaXplOiA5cHQ7IGxpbmUtaGVpZ2h0OiAxLjQ7IG92ZXJmbG93LXg6IGF1dG87CiAgICAgICBwYWdlLWJyZWFrLWluc2lkZTogYXZvaWQ7IH0KcHJlIGNvZGUgeyBiYWNrZ3JvdW5kOiB0cmFuc3BhcmVudDsgcGFkZGluZzogMDsgfQp0YWJsZSB7IGJvcmRlci1jb2xsYXBzZTogY29sbGFwc2U7IHdpZHRoOiAxMDAlOyBtYXJnaW46IDEycHggMDsgZm9udC1zaXplOiA5LjVwdDsKICAgICAgICBwYWdlLWJyZWFrLWluc2lkZTogYXZvaWQ7IH0KdGgsIHRkIHsgYm9yZGVyOiAxcHggc29saWQgI2JiYjsgcGFkZGluZzogNXB4IDdweDsgdGV4dC1hbGlnbjogbGVmdDsgdmVydGljYWwtYWxpZ246IHRvcDsgfQp0aCB7IGJhY2tncm91bmQ6ICNmMGYwZjA7IH0KYmxvY2txdW90ZSB7IGJvcmRlci1sZWZ0OiAzcHggc29saWQgIzFhM2Q3YTsgbWFyZ2luOiAxMHB4IDA7IHBhZGRpbmc6IDZweCAxNHB4OwogICAgICAgICAgICAgY29sb3I6ICMzMzM7IGJhY2tncm91bmQ6ICNmNWY4ZmM7IGZvbnQtc2l6ZTogMTAuNXB0OyB9CmhyIHsgYm9yZGVyOiBub25lOyBib3JkZXItdG9wOiAxcHggc29saWQgI2NjYzsgbWFyZ2luOiAyNHB4IDA7IH0Kc3Ryb25nIHsgY29sb3I6ICMxMTE7IH0KYSB7IGNvbG9yOiAjMWEzZDdhOyB9CmVtIHsgY29sb3I6ICM1NTU7IH0=" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">우리 프로젝트의 경쟁/동료 지형</h1>
+<p class="subtitle">웹 기반 비행 시뮬 + MAVLink GCS + HITL 어댑터 — 같은
+기술 모델을 만드는 곳들</p>
+<p class="author">리서치 기반 정리</p>
+<p class="date">2026-04-28</p>
+</header>
+<h1 id="이-문서가-다루는-것">0. 이 문서가 다루는 것</h1>
+<p>이 문서는 산업 전체가 아니라 <strong>우리 <code>flight-sim2</code> 와
+같은 기술 시그니처를 가진 프로젝트/회사</strong>만 핀포인트로 정리한다.
+일반 산업 보고서는 <a href="INDUSTRY-REPORT.md">INDUSTRY-REPORT.md</a>에
+따로 있다.</p>
+<h2 id="우리-프로젝트의-기술-시그니처">우리 프로젝트의 기술
+시그니처</h2>
+<p>다음 5개 항목이 동시에 성립하는 프로젝트를 <strong>peer</strong>로
+본다.</p>
+<ol type="1">
+<li><strong>웹 브라우저에서 실행</strong> (단일 HTML, 빌드 도구
+없음)</li>
+<li><strong>WebGL/Three.js/CesiumJS 등으로 자체 3D 렌더링</strong></li>
+<li><strong>공력(공기 동역학)을 코드로 직접 구현</strong> (Cannon.js
+같은 강체 엔진 X)</li>
+<li><strong>MAVLink 표준으로 외부 GCS/외부 시뮬과 통신</strong></li>
+<li><strong>HITL/SITL</strong> (외부 시스템이 비행을 계산하고 우리는
+시각화) 가 핵심 사용 사례</li>
+</ol>
+<p>이 5개를 모두 만족하는 곳은 사실 거의 없다. 대부분은 <strong>2-3개씩
+겹치는 인접 프로젝트</strong>다. 그 인접 그룹을 4개 카테고리로 나눠서
+본다.</p>
+<pre><code>                          ┌──────────────────┐
+                          │  flight-sim2     │
+                          │  (우리)          │
+                          └──┬───────────┬───┘
+              인접 (웹 비행)│           │인접 (MAVLink)
+                  ┌────────┘           └────────┐
+                  ▼                              ▼
+        ┌──────────────────┐         ┌──────────────────┐
+        │ A. 웹 비행 시뮬  │         │ B. 웹 MAVLink     │
+        │   (GeoFS 등)     │         │    GCS           │
+        │ Three/Cesium 기반│         │   (WebGCS, Helios)│
+        └──────────────────┘         └──────────────────┘
+
+        ┌──────────────────┐         ┌──────────────────┐
+        │ C. 상용 SaaS     │         │ D. 한국 진영      │
+        │   (Auterion,     │         │   (파이온, 두산   │
+        │    Sky-Drones,   │         │    DI, dstlabs,   │
+        │    Project AirSim)│        │    이노시뮬)      │
+        └──────────────────┘         └──────────────────┘</code></pre>
+<hr />
+<h1 id="a-그룹-웹-브라우저-비행-시뮬레이터-오픈소스무료">1. A 그룹 — 웹
+브라우저 비행 시뮬레이터 (오픈소스/무료)</h1>
+<h2 id="geofs-가장-직접적인-동류-그러나-다른-엔진">1-1.
+<strong>GeoFS</strong> — 가장 직접적인 동류 (그러나 다른 엔진)</h2>
+<p><a href="https://www.geo-fs.com/">geo-fs.com</a></p>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>운영</td>
+<td>1인 개발자 (Xavier Tassin, 프랑스)</td>
+</tr>
+<tr>
+<td>엔진</td>
+<td><strong>CesiumJS</strong> (Three.js 아님) — 3D 지구 + 위성영상</td>
+</tr>
+<tr>
+<td>항공기</td>
+<td><strong>100+ 종</strong>, 글라이더 → 여객기 → 로켓까지</td>
+</tr>
+<tr>
+<td>물리</td>
+<td>모든 조종면에 양력/항력/실속 — 코드 기반 공력</td>
+</tr>
+<tr>
+<td>멀티플레이</td>
+<td><strong>수백 명 동시</strong> + 실제 ADS-B 트래픽 통합</td>
+</tr>
+<tr>
+<td>무료/유료</td>
+<td>무료 + HD 위성영상 구독</td>
+</tr>
+<tr>
+<td>라이선스</td>
+<td>Closed source (커뮤니티 플러그인은 GitHub)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="우리와의-비교">우리와의 비교</h3>
+<table>
+<thead>
+<tr>
+<th>차원</th>
+<th>GeoFS</th>
+<th>flight-sim2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3D 엔진</td>
+<td>CesiumJS</td>
+<td>Three.js</td>
+</tr>
+<tr>
+<td>지형</td>
+<td>전 세계 위성 (Cesium Ion)</td>
+<td>절차적 (RKSI 가상)</td>
+</tr>
+<tr>
+<td>항공기 수</td>
+<td>100+</td>
+<td>2 (plane + drone)</td>
+</tr>
+<tr>
+<td>멀티플레이</td>
+<td>수백 명</td>
+<td>peer-to-peer (브릿지 relay)</td>
+</tr>
+<tr>
+<td>MAVLink</td>
+<td><strong>없음</strong></td>
+<td><strong>있음 (핵심)</strong></td>
+</tr>
+<tr>
+<td>HITL</td>
+<td>없음</td>
+<td><strong>있음</strong></td>
+</tr>
+<tr>
+<td>시나리오/스코어링</td>
+<td>없음</td>
+<td>있음</td>
+</tr>
+<tr>
+<td>데미지/충돌</td>
+<td>없음 (비현실적)</td>
+<td>있음</td>
+</tr>
+<tr>
+<td>라이선스</td>
+<td>폐쇄</td>
+<td>오픈 (사실상)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>GeoFS가 우리에게 주는 의미</strong>: “웹 비행 시뮬은
+작동한다, 수익화도 가능 (구독 모델)”의 증거. 다만 GeoFS는
+<strong>엔터테인먼트</strong> 노선이고 우리는
+<strong>엔지니어링/HITL</strong> 노선이라 직접 경쟁은 아님.</p>
+<p><strong>출처</strong>: - <a href="https://www.geo-fs.com/">GeoFS
+공식</a> - <a
+href="https://geofs.fandom.com/wiki/Tutorials/Making_an_aircraft">GeoFS
+Wiki - Aircraft 개발 가이드</a> - <a
+href="https://github.com/geofs-plugins/aircraft-warehouse">GeoFS Plugins
+Aircraft Warehouse - GitHub</a></p>
+<h2
+id="dimartarmiziweb-flight-simulator-three.js-cesiumjs-하이브리드">1-2.
+<strong>dimartarmizi/web-flight-simulator</strong> — Three.js + CesiumJS
+하이브리드</h2>
+<p><a href="https://github.com/dimartarmizi/web-flight-simulator">GitHub
+repo</a></p>
+<ul>
+<li><strong>Three.js</strong> 항공기 + <strong>CesiumJS</strong>
+지형</li>
+<li>아케이드 스타일 (정밀 공력 X)</li>
+<li>2025년 Hacker News 게재 (<a
+href="https://news.ycombinator.com/item?id=46948113">item 46948113</a>)
+→ 화제</li>
+<li>단일 개발자 사이드 프로젝트</li>
+</ul>
+<p><strong>우리와의 차이</strong>: 우리는 절차적 지형 + 정밀 공력
+(Cessna급) + MAVLink. 이 프로젝트는 시각화 + 게임성 위주.</p>
+<h2 id="jakob-maier-블로그-시리즈-three.js-비행-시뮬-튜토리얼">1-3.
+<strong>Jakob Maier 블로그 시리즈</strong> — Three.js 비행 시뮬
+튜토리얼</h2>
+<p><a
+href="https://www.jakobmaier.at/posts/flight-simulator-in-javascript/">jakobmaier.at
+- Building a Flight Simulator with JavaScript and THREE.js</a></p>
+<ul>
+<li>교육용 글, 단계별 빌드</li>
+<li>Three.js 기반, 절차적</li>
+<li>2024 작성, 우리와 가장 유사한 학습 경로</li>
+</ul>
+<p><strong>우리에게 주는 의미</strong>: 이 사람의 블로그 시리즈가
+<strong>flight-sim2의 입문서로 추천 가능</strong>. 우리 코드를
+시각적으로 더 잘 만드는 데 참고할 수 있다.</p>
+<h2 id="phuang17flightsimulator-three.js-webgl">1-4.
+<strong>phuang17/FlightSimulator</strong> — Three.js + WebGL</h2>
+<p><a href="https://github.com/phuang17/FlightSimulator">GitHub</a> —
+미니멀 Three.js 비행 시뮬, 학습용</p>
+<p>요약: A 그룹에서 <strong>GeoFS 외에는 모두 1인/사이드 프로젝트
+수준</strong>. 우리 프로젝트가 5000+ LOC + MAVLink + HITL + 시나리오까지
+갖췄으면 <strong>이 그룹에서 코드 완성도 측면 상위권</strong>.</p>
+<hr />
+<h1 id="b-그룹-웹-mavlink-gcs-브릿지-브라우저">2. B 그룹 — 웹 MAVLink
+GCS (브릿지 + 브라우저)</h1>
+<p>이 그룹이 우리 <code>bridge/server.mjs</code> +
+<code>src/missionLink.js</code> 와 직접 겹친다.</p>
+<h2 id="helios-gcs-가장-완성도-높은-오픈-gcs">2-1. <strong>Helios
+GCS</strong> — 가장 완성도 높은 오픈 GCS</h2>
+<p><a href="https://heliosgcs.com/">heliosgcs.com</a></p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>라이선스</td>
+<td>오픈소스, 무료</td>
+</tr>
+<tr>
+<td>플랫폼</td>
+<td>macOS / Windows / Linux / iOS / Android / <strong>웹</strong> (모두
+지원)</td>
+</tr>
+<tr>
+<td>호환</td>
+<td>ArduPilot + PX4</td>
+</tr>
+<tr>
+<td>기능</td>
+<td>실시간 텔레메트리, 미션 플래닝, <strong>DuckDB 분석</strong></td>
+</tr>
+<tr>
+<td>특이점</td>
+<td>오프라인 분석에 DuckDB 내장</td>
+</tr>
+</tbody>
+</table>
+<p><strong>우리와의 비교</strong>: Helios는 <strong>GCS만</strong>
+(시각화+분석). 우리 브릿지는 <strong>시뮬+GCS+HITL</strong> 통합. Helios
++ 우리 시뮬을 합치면 더 강력.</p>
+<h2 id="webgcs-tornado-websocket">2-2. <strong>WebGCS</strong> — Tornado
++ WebSocket</h2>
+<p><a href="https://webgcs.org/">webgcs.org</a> / <a
+href="https://github.com/kiorpesc/WebGCS">GitHub -
+kiorpesc/WebGCS</a></p>
+<ul>
+<li>Python Tornado 서버 + JavaScript 브라우저</li>
+<li><strong>태블릿/노트북/스마트폰 호환</strong>, 설치 없음</li>
+<li>우리 브릿지와 같은 아키텍처 (다른 언어)</li>
+</ul>
+<h2 id="ados-mission-control-다중-드론-fleet">2-3. <strong>ADOS Mission
+Control</strong> — 다중 드론 fleet</h2>
+<p><a href="https://github.com/altnautica/ADOSMissionControl">GitHub -
+altnautica/ADOSMissionControl</a></p>
+<ul>
+<li>웹 기반 GCS, FC config + 센서 캘리브레이션 + 미션 플래닝</li>
+<li><strong>다중 드론 fleet</strong> 지원</li>
+<li>ArduPilot SITL 직접 launch 가능</li>
+<li>“True software-defined drones” 컨셉</li>
+</ul>
+<p><strong>우리와의 비교</strong>: ADOS는 <strong>fleet management 측 +
+설정/캘리브레이션</strong> 강함. 우리는 <strong>시각화 + HITL</strong>
+강함. 보완재.</p>
+<h2 id="mavelous-원조-브라우저-mavlink-gcs">2-4.
+<strong>Mavelous</strong> — 원조 브라우저 MAVLink GCS</h2>
+<p><a href="https://github.com/wiseman/mavelous">GitHub -
+wiseman/mavelous</a> / <a
+href="https://diydrones.com/profiles/blogs/mavelous-the-browser-based-mavlink-gcs-is-coming-on-strong">DIYDrones
+글</a></p>
+<ul>
+<li>2012-2014 활발, 이후 정체</li>
+<li>“브라우저에서 MAVLink GCS” 컨셉 최초 증명</li>
+<li>우리 영역의 <strong>역사적 출발점</strong></li>
+</ul>
+<h2 id="nodejs-websockets-gcs-nodegcs-node.js-시도들">2-5.
+<strong>Nodejs-Websockets-GCS / nodegcs</strong> — Node.js 시도들</h2>
+<ul>
+<li><a
+href="https://github.com/gaelbillon/Nodejs-Websockets-GCS">gaelbillon/Nodejs-Websockets-GCS</a></li>
+<li><a href="https://github.com/kvenux/nodegcs">kvenux/nodegcs</a></li>
+</ul>
+<p>Node.js + WebSocket으로 MAVLink relay. 1인 프로젝트, 메인테넌스 미흡.
+우리 브릿지의 직속 친척이지만 더 단순.</p>
+<h2 id="b-그룹-종합">B 그룹 종합</h2>
+<ul>
+<li>가장 활발: <strong>Helios GCS</strong> (다중 플랫폼 + 분석)</li>
+<li>다중 드론 강자: <strong>ADOS</strong></li>
+<li>가장 단순/직접: <strong>WebGCS, NodeJS-WebSocket-GCS</strong></li>
+</ul>
+<p>이들과 우리의 차이: <strong>우리는 GCS가 아니라 SIMULATOR + GCS
+어댑터</strong>. GCS만 하는 도구들과는 정면 경쟁이 아니라 <strong>합쳐
+쓸 수 있는 보완재</strong>.</p>
+<hr />
+<h1 id="c-그룹-상용-saas-산업급">3. C 그룹 — 상용 SaaS / 산업급</h1>
+<h2 id="auterion-virtual-skynode-우리와-가장-유사한-상용-제품">3-1.
+<strong>Auterion Virtual Skynode</strong> ★ 우리와 가장 유사한 상용
+제품</h2>
+<p><a
+href="https://docs.auterion.com/app-development/simulation/virtual-skynode">Auterion
+docs - Virtual Skynode</a></p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>회사</td>
+<td>Auterion (스위스, PX4 핵심 메인테이너)</td>
+</tr>
+<tr>
+<td>모델</td>
+<td><strong>PX4 Autopilot 코드를 가상 Skynode 위에서 실행</strong></td>
+</tr>
+<tr>
+<td>웹 인터페이스</td>
+<td>http://10.41.200.2 (브라우저 접속)</td>
+</tr>
+<tr>
+<td>시뮬 모드</td>
+<td><strong>SIH</strong> (자체 내장, Gazebo 불필요) / Gazebo /
+<strong>AirSim</strong> (Unreal)</td>
+</tr>
+<tr>
+<td>통신</td>
+<td><strong>MAVLink + Mission Control 직접 연결</strong></td>
+</tr>
+<tr>
+<td>가격</td>
+<td>Skynode 하드웨어 + 라이선스 (정확 가격 비공개)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="왜-이게-우리-모델과-가장-유사한가">왜 이게 우리 모델과 가장
+유사한가</h3>
+<pre><code>flight-sim2:
+  외부 sim → POST /hitl/state → bridge → SSE → browser → mesh
+
+Virtual Skynode:
+  PX4 코드 → Skynode VM → SIH/AirSim → 웹 UI에서 시각화</code></pre>
+<p>같은 컨셉. 우리는 <strong>HTML 5000줄 오픈소스</strong>, Auterion은
+<strong>상용 + PX4 메인테이너 권위</strong>.</p>
+<h3 id="그러나-다른-부분">그러나 다른 부분</h3>
+<ul>
+<li>Auterion은 <strong>PX4 한정</strong>. 우리는 MAVLink 호환되는 모든
+것.</li>
+<li>Auterion은 <strong>자체 코드를 Virtual FMU에서 돌림</strong>. 우리는
+외부 sim → JSON state → 시각화.</li>
+<li>Auterion은 <strong>상용 lock-in</strong>. 우리는 <strong>단일 HTML,
+lock-in 0</strong>.</li>
+</ul>
+<p>→ Auterion 고객 (PX4 진영 드론 회사) 중 <strong>상용 lock-in
+부담스러운 곳</strong>이 우리 잠재 사용자.</p>
+<p><strong>출처</strong>: - <a
+href="https://docs.auterion.com/app-development/simulation/virtual-skynode">Auterion
+Documentation - Virtual Skynode</a> - <a
+href="https://docs.auterion.com/app-development/simulation/virtual-skynode/simulation-airsim-reference">Auterion
+Documentation - AirSim Reference</a> - <a
+href="https://docs.px4.io/main/en/companion_computer/auterion_skynode">PX4
+Guide - Auterion Skynode</a> - <a
+href="https://github.com/Auterion/px4-jsbsim-bridge">GitHub -
+Auterion/px4-jsbsim-bridge</a> (우리 M10 추천 — JSBSim 통합 — 의
+reference)</p>
+<h2 id="sky-drones-smartlink-cloud">3-2. <strong>Sky-Drones SmartLink +
+Cloud</strong></h2>
+<p><a href="https://sky-drones.com/">sky-drones.com</a></p>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>회사</td>
+<td>Sky-Drones Technologies (영국 런던)</td>
+</tr>
+<tr>
+<td>제품</td>
+<td>SmartLink (datalink HW $3,990) + Cloud (SaaS)</td>
+</tr>
+<tr>
+<td>모델</td>
+<td><strong>드론 fleet management + 실시간 제어 + AI 분석</strong></td>
+</tr>
+<tr>
+<td>클라이언트</td>
+<td>군 / 보안 / 응급대응 / 엔터프라이즈 UAV</td>
+</tr>
+</tbody>
+</table>
+<p>Sky-Drones는 <strong>웹 기반이지만 시뮬레이터가 아님</strong> — 진짜
+드론 운영 플랫폼. 우리 시뮬이 데모/마케팅 도구라면, Sky-Drones는
+<strong>그 후 실제 운영 플랫폼</strong>. 보완재.</p>
+<h2 id="microsoft-project-airsim-iamai-후속">3-3. <strong>Microsoft
+Project AirSim → IAMAI 후속</strong></h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>시기</th>
+<th>상태</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2017-2022</td>
+<td>Microsoft AirSim (오픈소스, Unreal)</td>
+</tr>
+<tr>
+<td>2022.07</td>
+<td><strong>Project AirSim</strong> 상용 클라우드 출시 (Farnborough
+Airshow)</td>
+</tr>
+<tr>
+<td>2024</td>
+<td>Microsoft 정식 단종</td>
+</tr>
+<tr>
+<td>2024-현재</td>
+<td><strong>IAMAI Consulting Corp</strong> (전 AirSim 엔지니어들)
+오픈소스로 부활</td>
+</tr>
+</tbody>
+</table>
+<p><a href="https://github.com/iamaisim/ProjectAirSim">GitHub -
+iamaisim/ProjectAirSim</a></p>
+<ul>
+<li><strong>Unreal Engine 5 기반</strong>, 우리 Three.js와 다른
+기술</li>
+<li>엔터프라이즈/방산용 자율비행 시뮬</li>
+<li>AI 학습용 합성 데이터 생성 강함</li>
+</ul>
+<p><strong>우리와 비교</strong>: AirSim은
+<strong>데스크톱/Unreal</strong>, 우리는 <strong>웹/Three.js</strong>.
+시장이 다르다 — Unreal 기반은 visual fidelity 우선, 우리는 즉시성/접근성
+우선.</p>
+<p><strong>출처</strong>: - <a
+href="https://www.geekwire.com/2022/microsofts-project-airsim-is-pushing-drone-simulation-software-to-new-heights/">GeekWire
+- Microsoft’s Project AirSim</a> - <a
+href="https://en.wikipedia.org/wiki/AirSim">Wikipedia - AirSim</a> - <a
+href="https://github.com/iamaisim/ProjectAirSim">GitHub -
+iamaisim/ProjectAirSim</a></p>
+<h2 id="cesium-기반-상용-스택-드론-분야">3-4. <strong>Cesium 기반 상용
+스택</strong> (드론 분야)</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>회사/제품</th>
+<th>특기</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://cesium.com/">Cesium ion</a></td>
+<td>3D 지구 platform, 본진</td>
+</tr>
+<tr>
+<td><a href="https://www.propelleraero.com/">Propeller Aero</a></td>
+<td>드론 측량, <strong>CesiumJS 기반</strong> 시각화</td>
+</tr>
+<tr>
+<td><a
+href="https://anvil.so/post/custom-plugins-for-drone-data-in-cesium">Anvil
+Labs</a></td>
+<td>드론 데이터용 Cesium 커스텀 플러그인</td>
+</tr>
+<tr>
+<td><a href="https://cesium.com/blog/2021/01/25/sky-drones/">Sky-Drones
++ Cesium</a></td>
+<td>원격 드론 운영 + UTM에 Cesium 활용</td>
+</tr>
+</tbody>
+</table>
+<p>이 그룹의 공통점: <strong>3D 지구 시각화 = CesiumJS 사실상
+표준</strong>. 우리가 진짜 지형으로 가려면 (M12) Cesium 통합이 옵션.
+또는 Three.js + Mapbox terrain tiles.</p>
+<p><strong>MATLAB UAV Toolbox + Cesium 통합</strong>도 존재 —
+학계/연구실에서 시뮬-시각화 분리할 때 표준 스택.</p>
+<p><a
+href="https://www.mathworks.com/help/uav/ug/visualize-with-cesium.html">MATLAB
+- Visualize with Cesium</a></p>
+<hr />
+<h1 id="d-그룹-한국-진영-우리와-같은-모델">4. D 그룹 — 한국 진영 (우리와
+같은 모델)</h1>
+<p>이 섹션이 사용자 관점에서 가장 중요하다.</p>
+<h2 id="파이온시스템즈-paion-systems-omni-gcs">4-1.
+<strong>파이온시스템즈 (Paion Systems) — OMNI-GCS</strong></h2>
+<p><a href="http://fionsystems.com/gcs/">fionsystems.com/gcs</a></p>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>본사</td>
+<td>한국</td>
+</tr>
+<tr>
+<td>제품</td>
+<td><strong>OMNI-GCS</strong> — 자체 개발</td>
+</tr>
+<tr>
+<td>모델</td>
+<td><strong>웹 기반 다기종 다중 드론</strong> 지상관제</td>
+</tr>
+<tr>
+<td>위치</td>
+<td>우리 브릿지 + GCS 영역</td>
+</tr>
+</tbody>
+</table>
+<p><strong>한국에서 가장 우리와 유사한 회사</strong>. 다만 시뮬이 아닌
+<strong>운영 GCS</strong>. PX4/ArduPilot 호환 드론을 웹에서 관제.</p>
+<p>→ <strong>잠재 협력 대상</strong>: 우리 시뮬이 그들 GCS의
+<strong>데모/훈련 모드</strong>가 될 수 있음.</p>
+<h2 id="두산디지털이노베이션-apx-solution">4-2.
+<strong>두산디지털이노베이션 — APX Solution</strong></h2>
+<p><a href="https://www.youtube.com/watch?v=DbugIjJRX3s">YouTube -
+두산디지털이노베이션 APX Solution #1 GCS (웹 기반)</a></p>
+<ul>
+<li>두산 그룹 디지털 사업</li>
+<li><strong>드론 플랫폼 서비스 APX Solution</strong> — 웹 기반 GCS가 1번
+모듈</li>
+<li>두산모빌리티이노베이션 (수소드론) + 시너지</li>
+</ul>
+<p>→ <strong>두산 생태계 안에 우리 컨셉이 이미 존재</strong>. 두산 DI가
+GCS, DMI가 드론 만들고, 우리 같은 시뮬은 외부 통합 가능.</p>
+<h2 id="drone-software-technology-lab-dstlabs.co.kr">4-3. <strong>Drone
+Software Technology Lab (dstlabs.co.kr)</strong></h2>
+<p><a href="https://dstlabs.co.kr/">dstlabs.co.kr</a></p>
+<ul>
+<li>ArduPilot <strong>Mission Planner 기반 오픈소스</strong> 드론 제어
+SW</li>
+<li>2025년 5월 신서비스 출시 예정</li>
+<li>한국 ArduPilot 진영의 거점</li>
+</ul>
+<p>→ ArduPilot 진영이라 우리 MAVLink 브릿지 + ArduPilot 호환성 확장 시
+협업 가능.</p>
+<h2 id="이노시뮬레이션-한화에어로스페이스-lvc-시뮬">4-4.
+<strong>이노시뮬레이션</strong> — 한화에어로스페이스 LVC 시뮬</h2>
+<p><a href="https://www.venturesquare.net/957806/">VentureSquare -
+이노시뮬레이션, 한화에어로스페이스 무기체계운용 훈련 시뮬레이터</a></p>
+<ul>
+<li>한국 LVC (Live-Virtual-Constructive) 시뮬 전문</li>
+<li><strong>한화에어로스페이스 무기체계 운용 훈련 시뮬레이터</strong>
+공급</li>
+<li>우리와는 다른 영역 (군용 통합 훈련) 이지만 <strong>LVC 표준이 우리
+멀티플레이어와 컨셉 유사</strong></li>
+</ul>
+<p><strong>LVC 의미</strong>: - <strong>Live</strong>: 실제 인원/장비 -
+<strong>Virtual</strong>: 시뮬에서 사람 조종 -
+<strong>Constructive</strong>: AI/computational 모델 (NPC 등)</p>
+<p>우리 프로젝트의 <strong>AI 트래픽 (Constructive) + 멀티플레이어
+(Virtual) + HITL (Live HW)</strong> 조합이 사실상 LVC 미니어처. 한국군
+LVC 시장에 우리 프로젝트가 <strong>저예산 demo/POC 도구</strong>로 fit
+가능.</p>
+<h2 id="자이언트드론-giantdrone">4-5. <strong>자이언트드론
+(Giantdrone)</strong></h2>
+<p><a href="http://www.giantdrone.com/m/newtech/fcs.php">giantdrone.com
+- FCS, GCS</a></p>
+<ul>
+<li>한국 드론 제조 + FCS(Flight Control System) + GCS 자체 개발</li>
+<li>산업 분야 드론 솔루션 위주</li>
+</ul>
+<h2 id="포스웨이브-피앤유드론-kndrone">4-6. <strong>포스웨이브,
+피앤유드론, kndrone</strong></h2>
+<p><a href="http://fourthwave.co.kr/product/gcs.php">포스웨이브 GCS</a>
+/ <a href="http://www.kndrone.com/sw_gcs_web.html">kndrone 웹 GCS</a> /
+<a href="https://www.pnudrone.com/">피앤유드론</a></p>
+<ul>
+<li>중소 GCS 전문/드론 솔루션 회사들</li>
+<li>각자 자체 GCS, 웹 기반 일부</li>
+</ul>
+<p>이들 중소회사들이 잠재 고객 또는 OEM 통합 파트너 가능성.</p>
+<h2 id="한국-정부-rd-lvc-드론-시뮬레이터">4-7. <strong>한국 정부 R&amp;D
+— LVC 드론 시뮬레이터</strong></h2>
+<p><a
+href="https://scienceon.kisti.re.kr/srch/selectPORSrchReport.do?cn=TRKO202400004586">ScienceON
+- LVC 기반 드론 활용 전술훈련 시뮬레이터 개발</a></p>
+<p>정부 출연 연구로 진행된 <strong>LVC 기반 드론 전술훈련
+시뮬레이터</strong> 개발 보고서. 결과물: - <strong>드론 전술훈련
+시뮬레이터</strong> - 가상 드론 훈련 콘텐츠 - <strong>LVC 기반
+디지털트윈 지상운용 관제 시스템</strong></p>
+<p>→ 한국 정부가 이 영역에 자금을 쏟고 있다는 강한 시그널.
+KISTI/ScienceON에 보고서 다수.</p>
+<h2 id="kai-lvc-시장-진출-2021">4-8. <strong>KAI LVC 시장 진출
+(2021)</strong></h2>
+<p><a href="https://www.fnnews.com/news/202103111343193030">파이낸셜뉴스
+- KAI 미래형 훈련체계 LVC 시장 진출</a></p>
+<ul>
+<li>VR + AR + 4차 산업 기술 기반 미래형 훈련체계</li>
+<li>글로벌 방산시장에서 잠재력 큰 분야로 평가</li>
+<li>국방부가 통합훈련체계 구축 추진 중</li>
+</ul>
+<p>→ KAI가 도담시스템스 + 에픽게임즈 코리아에 더해 <strong>LVC 시장으로
+확장 중</strong>. 우리 프로젝트의 LVC 미니어처 컨셉이 시기적으로
+맞물림.</p>
+<hr />
+<h1 id="feature-매트릭스-한-눈에-비교">5. Feature 매트릭스 — 한 눈에
+비교</h1>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+</colgroup>
+<thead>
+<tr>
+<th>기능</th>
+<th>flight-sim2</th>
+<th>GeoFS</th>
+<th>Helios</th>
+<th>ADOS</th>
+<th>Auterion VS</th>
+<th>Project AirSim</th>
+<th>OMNI-GCS</th>
+<th>APX</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>웹 브라우저 실행</td>
+<td>★</td>
+<td>★</td>
+<td>☆</td>
+<td>★</td>
+<td>☆ (별도 IP)</td>
+<td>✗</td>
+<td>★</td>
+<td>★</td>
+</tr>
+<tr>
+<td>단일 HTML 배포</td>
+<td>★</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+<tr>
+<td>자체 3D 렌더</td>
+<td>Three.js</td>
+<td>CesiumJS</td>
+<td>(없음/지도)</td>
+<td>(지도)</td>
+<td>UE</td>
+<td>UE</td>
+<td>(지도)</td>
+<td>(지도)</td>
+</tr>
+<tr>
+<td>코드급 공력</td>
+<td>★</td>
+<td>★</td>
+<td>✗</td>
+<td>✗</td>
+<td>(PX4)</td>
+<td>★</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+<tr>
+<td>MAVLink 통신</td>
+<td>★</td>
+<td>✗</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+<td>✗</td>
+<td>★</td>
+<td>★</td>
+</tr>
+<tr>
+<td>HITL/SITL</td>
+<td>★</td>
+<td>✗</td>
+<td>✗</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+<tr>
+<td>미션 플래닝</td>
+<td>★</td>
+<td>✗</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+</tr>
+<tr>
+<td>멀티 vehicle</td>
+<td>★ (peer)</td>
+<td>★</td>
+<td>✗</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+</tr>
+<tr>
+<td>데미지 모델</td>
+<td>★</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+<tr>
+<td>시나리오/스코어</td>
+<td>★</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>★</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+<tr>
+<td>사운드</td>
+<td>★</td>
+<td>★</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+<tr>
+<td>데이터 레코더</td>
+<td>★</td>
+<td>✗</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+<td>★</td>
+</tr>
+<tr>
+<td>오픈소스</td>
+<td>★</td>
+<td>✗</td>
+<td>★</td>
+<td>★</td>
+<td>✗</td>
+<td>★</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+<tr>
+<td>한국 회사/지원</td>
+<td>—</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>★</td>
+<td>★</td>
+</tr>
+</tbody>
+</table>
+<p>★ = 있음 / ☆ = 부분 / ✗ = 없음</p>
+<h2 id="매트릭스가-보여주는-것">매트릭스가 보여주는 것</h2>
+<ol type="1">
+<li><strong>단일 HTML 배포 = 우리만의 강점.</strong> 다른 모든 도구는
+설치/계정/하드웨어 요구.</li>
+<li><strong>자체 3D 렌더 + 코드급 공력 + MAVLink + HITL 모두 갖춘 건
+우리뿐</strong>. AirSim도 비슷하지만 Unreal이라 진입장벽 높음.</li>
+<li><strong>데미지 / 시나리오 / 사운드는 게임적 요소</strong> — 운영
+GCS들이 안 하는 것. 우리가 이 영역에서 차별화.</li>
+<li><strong>한국 진영은 시뮬보다 GCS 위주</strong> — 시뮬+GCS 결합한
+우리 컨셉이 한국에서 비어있음.</li>
+</ol>
+<hr />
+<h1 id="갭-분석-우리가-차지할-수-있는-공간">6. 갭 분석 — 우리가 차지할
+수 있는 공간</h1>
+<h2 id="시장의-빈-자리-b2b">6-1. 시장의 빈 자리 (B2B)</h2>
+<p>다음 시나리오에서 기존 도구들이 모두 부족하다:</p>
+<h3 id="시나리오-a-우리-비행-알고리즘-시연-회의">시나리오 A: “우리 비행
+알고리즘 시연 회의”</h3>
+<ul>
+<li>한국 드론 스타트업 (니어스랩, 파블로항공) PM이 <strong>투자자에게
+자사 군집 알고리즘 시연</strong></li>
+<li>옵션:
+<ul>
+<li>AirSim: Unreal 빌드 보내야 함 (10GB+, 기술자 필요)</li>
+<li>QGC + Gazebo: 데스크톱 앱 설치 필요</li>
+<li><strong>우리</strong>: URL 한 줄 → 즉시 시연 가능. 회의실 빔
+프로젝터에 띄워도 OK.</li>
+</ul></li>
+</ul>
+<h3 id="시나리오-b-fpga-기반-비행-sw-시연">시나리오 B: “FPGA 기반 비행
+SW 시연”</h3>
+<ul>
+<li>KARI/ADD/대학 연구실이 <strong>MATLAB/Simulink 또는 LabVIEW</strong>
+로 비행 알고리즘 만들어 놓고 시연이 필요</li>
+<li>옵션:
+<ul>
+<li>직접 시뮬 만들기: 6개월</li>
+<li>외주 (도담 등): 비용·시간 큼</li>
+<li><strong>우리 + HITL</strong>: WebSocket으로 state push → 즉시
+시각화</li>
+</ul></li>
+</ul>
+<h3 id="시나리오-c-교육용-드론-sw-학습">시나리오 C: “교육용 드론 SW
+학습”</h3>
+<ul>
+<li>대학생/주니어 엔지니어가 PX4/MAVLink 학습</li>
+<li>옵션:
+<ul>
+<li>PX4 SITL + Gazebo: Linux 환경 + 학습 곡선</li>
+<li><strong>우리</strong>: 브라우저에서 즉시 코드 읽고 실행</li>
+</ul></li>
+</ul>
+<h2 id="우리만-할-수-있는-것-auterion-대비-우위">6-2. 우리만 할 수 있는
+것 (Auterion 대비 우위)</h2>
+<table>
+<thead>
+<tr>
+<th>차원</th>
+<th>Auterion Virtual Skynode</th>
+<th>flight-sim2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>배포</td>
+<td>가상 머신 + IP 라우팅</td>
+<td>URL 한 줄</td>
+</tr>
+<tr>
+<td>종속성</td>
+<td>PX4 lock-in</td>
+<td>MAVLink만 호환되면 누구든</td>
+</tr>
+<tr>
+<td>비용</td>
+<td>라이선스 (수천 달러+)</td>
+<td>0 (오픈소스)</td>
+</tr>
+<tr>
+<td>커스터마이징</td>
+<td>Auterion 정책 따름</td>
+<td>코드 직접 수정</td>
+</tr>
+<tr>
+<td>시각 디테일</td>
+<td>Unreal 기반 (강함)</td>
+<td>Three.js (보통)</td>
+</tr>
+<tr>
+<td>HITL 어댑터</td>
+<td>PX4 코드만</td>
+<td>임의 외부 시스템</td>
+</tr>
+</tbody>
+</table>
+<h2 id="우리가-약한-것-당장-보강해야-할">6-3. 우리가 약한 것 (당장
+보강해야 할)</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>약점</th>
+<th>보강 방법 (어디서 빌려옴)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>정통 공력 모델 부족</td>
+<td><strong>JSBSim 통합 (M10)</strong> — Auterion px4-jsbsim-bridge가
+reference</td>
+</tr>
+<tr>
+<td>진짜 지형 데이터 없음</td>
+<td><strong>Cesium ion 통합 (M12)</strong> — Propeller/Anvil처럼</td>
+</tr>
+<tr>
+<td>미션 분석 SW 부족</td>
+<td><strong>DuckDB 내장</strong> (Helios GCS 처럼)</td>
+</tr>
+<tr>
+<td>인증급 검증 부족</td>
+<td>(장기) DO-178C path</td>
+</tr>
+<tr>
+<td>사용자 베이스/홍보</td>
+<td>한국 LVC R&amp;D 진영에 침투</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="실행-추천">7. 실행 추천</h1>
+<h2 id="단기-1-2개월">7-1. 단기 (1-2개월)</h2>
+<ol type="1">
+<li><strong><code>README.md</code> 영문화 + 짧은 데모 영상</strong> —
+글로벌 OSS 진영 (PX4 Discord, ArduPilot Forum) 노출</li>
+<li><strong>JSBSim 통합 (M10)</strong> — Auterion px4-jsbsim-bridge
+패턴을 웹으로 포팅. 게임 시뮬 → 엔지니어링 시뮬 격상</li>
+<li><strong>한국 한정 추가 작업</strong>: 인천공항(RKSI) 실제 활주로
+데이터 + 한글 HUD 옵션</li>
+</ol>
+<h2 id="중기-3-6개월">7-2. 중기 (3-6개월)</h2>
+<ol type="1">
+<li><strong>dstlabs.co.kr / 파이온시스템즈 / 두산DI 에 데모
+메일</strong> — 통합 가능성 타진</li>
+<li><strong>KARI/ADD R&amp;D 입찰 모니터링</strong> (<a
+href="https://scienceon.kisti.re.kr/">scienceon.kisti.re.kr</a> ) — LVC
+드론 사업 후속이 우리 fit</li>
+<li><strong>한국 UAM 회사 (슈퍼널, Plana)에 시연 도구 제안</strong> —
+투자자/규제기관 데모용</li>
+</ol>
+<h2 id="장기-6-12개월">7-3. 장기 (6-12개월)</h2>
+<ol type="1">
+<li><strong>B2B SaaS 라이선스 모델 시작</strong> — 월 $500-2000 (드론
+스타트업), $2000-5000 (UAM/방산)</li>
+<li><strong>LVC 통합 데모 — 한국 국방부 합성훈련환경 사업
+follow</strong> (<a
+href="https://www.fnnews.com/news/202103111343193030">defense
+report</a>)</li>
+<li><strong>Cesium ion 통합 → 글로벌 시장</strong> (북미 Sky-Drones /
+Propeller 같은 위치)</li>
+</ol>
+<hr />
+<h1 id="한-줄-요약">8. 한 줄 요약</h1>
+<blockquote>
+<p><strong>우리 프로젝트의 진짜 동류는 GeoFS (웹 비행 시뮬), Helios GCS
+(웹 MAVLink), Auterion Virtual Skynode (HITL+웹) 셋이다. 이 세 가지를
+모두 합친 단일 HTML이 시장에 없다. 한국에서는 OMNI-GCS, APX Solution,
+이노시뮬레이션 LVC 같은 인접 회사들이 있지만, 시뮬+GCS 결합은 비어 있다.
+우리가 정확히 겨냥할 수 있는 시장이다.</strong></p>
+</blockquote>
+<hr />
+<h1 id="부록-출처">부록 — 출처</h1>
+<h2 id="오픈소스-무료">오픈소스 / 무료</h2>
+<ul>
+<li><a href="https://www.geo-fs.com/">GeoFS</a> — Free Online Flight
+Simulator</li>
+<li><a
+href="https://github.com/dimartarmizi/web-flight-simulator">GitHub -
+dimartarmizi/web-flight-simulator</a></li>
+<li><a
+href="https://www.jakobmaier.at/posts/flight-simulator-in-javascript/">Jakob
+Maier - Flight Simulator with JS+THREE.js</a></li>
+<li><a href="https://heliosgcs.com/">Helios GCS</a></li>
+<li><a href="https://webgcs.org/">WebGCS</a> / <a
+href="https://github.com/kiorpesc/WebGCS">GitHub
+kiorpesc/WebGCS</a></li>
+<li><a href="https://github.com/altnautica/ADOSMissionControl">GitHub
+altnautica/ADOSMissionControl</a></li>
+<li><a href="https://github.com/wiseman/mavelous">GitHub
+wiseman/mavelous</a></li>
+<li><a href="https://github.com/gaelbillon/Nodejs-Websockets-GCS">GitHub
+gaelbillon/Nodejs-Websockets-GCS</a></li>
+<li><a href="https://github.com/kvenux/nodegcs">GitHub
+kvenux/nodegcs</a></li>
+<li><a href="https://github.com/iamaisim/ProjectAirSim">GitHub
+iamaisim/ProjectAirSim</a></li>
+<li><a href="https://github.com/Auterion/px4-jsbsim-bridge">GitHub
+Auterion/px4-jsbsim-bridge</a></li>
+<li><a href="https://jsbsim.sourceforge.net/">JSBSim 공식</a></li>
+</ul>
+<h2 id="상용">상용</h2>
+<ul>
+<li><a
+href="https://docs.auterion.com/app-development/simulation/virtual-skynode">Auterion
+- Virtual Skynode</a></li>
+<li><a href="https://sky-drones.com/">Sky-Drones Technologies</a></li>
+<li><a href="https://cesium.com/use-cases/drones/">Cesium ion (use case:
+drones)</a></li>
+<li><a
+href="https://www.mathworks.com/help/uav/ug/visualize-with-cesium.html">MATLAB
+UAV Toolbox + Cesium</a></li>
+<li><a href="https://www.propelleraero.com/">Propeller Aero - drone
+surveys</a></li>
+<li><a
+href="https://anvil.so/post/custom-plugins-for-drone-data-in-cesium">Anvil
+Labs - Cesium plugins</a></li>
+<li><a
+href="https://www.geekwire.com/2022/microsofts-project-airsim-is-pushing-drone-simulation-software-to-new-heights/">GeekWire
+- Microsoft Project AirSim</a></li>
+</ul>
+<h2 id="한국">한국</h2>
+<ul>
+<li><a href="http://fionsystems.com/gcs/">파이온시스템즈
+OMNI-GCS</a></li>
+<li><a
+href="https://www.youtube.com/watch?v=DbugIjJRX3s">두산디지털이노베이션
+APX Solution (YouTube)</a></li>
+<li><a href="https://dstlabs.co.kr/">Drone Software Technology
+Lab</a></li>
+<li><a href="http://www.giantdrone.com/m/newtech/fcs.php">자이언트드론
+FCS/GCS</a></li>
+<li><a href="http://fourthwave.co.kr/product/gcs.php">포스웨이브
+GCS</a></li>
+<li><a href="http://www.kndrone.com/sw_gcs_web.html">kndrone 웹
+GCS</a></li>
+<li><a href="https://www.pnudrone.com/">피앤유드론</a></li>
+<li><a href="https://www.venturesquare.net/957806/">VentureSquare -
+이노시뮬레이션 한화에어로 LVC</a></li>
+<li><a
+href="https://scienceon.kisti.re.kr/srch/selectPORSrchReport.do?cn=TRKO202400004586">ScienceON
+- LVC 드론 시뮬레이터 보고서</a></li>
+<li><a
+href="https://www.fnnews.com/news/202103111343193030">파이낸셜뉴스 - KAI
+LVC 시장 진출</a></li>
+<li><a
+href="https://www.dbpia.co.kr/journal/articleDetail?nodeId=NODE10549917">DBpia
+- 디지털 트윈 통합전투훈련플랫폼</a></li>
+</ul>
+<hr />
+<p><em>본 보고서는 2026.04.28 기준 공개 자료. 우리 프로젝트의 직접
+peer만 다룸 (광역 산업은 INDUSTRY-REPORT.md). 한국 회사 정보는 공개
+웹/공시 기반이며 비공개 사정은 포함하지 않음.</em></p>
+</body>
+</html>

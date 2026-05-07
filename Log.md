@@ -1,0 +1,398 @@
+# Log — Flight Simulator Build Log
+
+> **Append-only.** 매 Ralph 루프 끝에 **반드시** 새 entry 추가.
+> 형식은 `CLAUDE.md §5` 참조 — 이탈 금지.
+> 기존 entry는 절대 수정/삭제하지 마라.
+
+---
+
+## 2026-04-27 INIT — Project bootstrapped
+
+**Status**: GREEN
+**Files changed**: PRD.md, CLAUDE.md, Log.md, PROMPT_ralph.md (created)
+**Tests**: N/A (코드 없음)
+**Decisions**:
+- 기술 스택: Three.js r128 (CDN) + Vanilla ES Modules + node:test
+- "EGI 모델"은 Embedded GPS/INS로 해석 → 코어 비행 동역학(M0–M4)과 분리하여 M5(선택)로 배치
+- 단일 HTML 더블클릭 실행을 M0 DoD로 고정
+- 물리는 Cannon.js 등 강체 엔진 미사용 (비행은 공력이 본질)
+- TDD-lite: 물리 함수만 unit test, UI는 콘솔 에러 0 + 사용자 시각 확인
+**Next**:
+- M0 시작: `index.html` + `package.json` + `src/main.js` + `tests/physics.test.mjs` placeholder + 빈 Three.js 캔버스 + 회전하는 단순 큐브
+**Notes**:
+- macOS Safari + Chrome 양쪽 동작 확인 필수 (Safari가 더 까다로울 수 있음)
+- Three.js r128 CDN URL 고정: `https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js`
+
+---
+
+<!-- 다음 entry부터 Claude Code가 이어서 추가. 위 형식 그대로. -->
+
+## 2026-04-27 21:00 — M0–M4: MVP 일괄 구현
+
+**Status**: GREEN
+**Files changed**: index.html, package.json, README.md, src/main.js, src/world.js, src/aircraft.js, src/physics.js, src/controls.js, src/camera.js, src/hud.js, tests/physics.test.mjs
+**Tests**: 14 added, 14 passing, 0 failing
+**Decisions**:
+- 사용자 지시로 한 세션에서 M0–M4를 일괄 진행 (PROMPT_ralph "한 루프=한 마일스톤" 규칙은 사용자 지시가 상위)
+- M5 EGI는 MVP 범위 외로 제외
+- 항공기 파라미터 Cessna급으로 고정: mass=1000kg, wingArea=16m², maxThrust=4500N
+- 이륙 sanity test 임계 조정: v=40 m/s, CL=1.0, mass=1000kg (PRD §F2의 "약 25 m/s 이상" DoD는 CL_max에 의존하므로 30~45 m/s가 현실적 — 활주로 가속 후 살짝 W로 회전)
+- 본체 프레임 부호: ω_x=+pitch(W), ω_y=+yaw(E), ω_z=−roll(D=우롤이므로 z 음의 회전) — physics 코드 주석 + euler 'YXZ' 분해로 일관 유지
+- 자동 안정화: 입력 놓으면 pitch/roll 모두 0으로 천천히 복귀 → 비행 난이도 완화 (PRD §9 리스크 대응)
+- HUD는 DOM(앰버 텍스트) + 캔버스 오버레이(피치 사다리/십자선) 하이브리드 — Three.js 텍스처 부담 회피
+- 빌딩 60개 + 산 35개 (PRD 50/30 기준 충족)
+**Next**:
+- 사용자가 `open index.html` 로 MVP 동작 확인 → 피드백 수집
+- 후속: M5 EGI(INS/GPS 토글), 사운드, 스모크 테스트(Playwright)
+**Notes**:
+- 사용자 확인 항목 (Mac Mini):
+  1. `open index.html` 시 5초 내 활주로 + 항공기 + HUD 표시
+  2. 콘솔 에러 0 (DevTools Console 확인)
+  3. ↑ 길게 → 스로틀 100% → 활주로에서 가속 → 30 m/s 부근에서 W로 이륙
+  4. V로 카메라 토글 (chase → cockpit → external)
+  5. P로 일시정지, R로 리셋
+  6. STALL 표시: 저속 + 큰 AoA에서 빨간색 STATUS
+- `npm test` → 14/14 PASS
+- node 25에서 `node --test tests/`가 디렉토리 인자를 모듈로 해석하는 회귀가 있어 `tests/*.test.mjs` glob으로 변경
+- M0 placeholder 큐브는 M1 월드로 대체됨 (회전 큐브는 더 이상 보이지 않음 — 의도)
+
+---
+
+## 2026-04-27 22:30 — M6: QGroundControl 연동 (브릿지 + MAVLink)
+
+**Status**: GREEN
+**Files changed**: bridge/server.mjs (new), bridge/mavlink.mjs (new), src/telemetry.js (new), src/main.js, src/hud.js, index.html, package.json, README.md, PRD.md, tests/mavlink.test.mjs (new)
+**Tests**: 10 added (MAVLink encoder), 24 total passing, 0 failing
+**Decisions**:
+- 통신 경로: 브라우저 → HTTP POST(20Hz) → Node 브릿지 → UDP MAVLink → QGC. WebSocket 대신 HTTP 폴링으로 외부 의존성(`ws`) 회피 — Node `http`/`dgram` built-in만 사용 (PRD §9 위반 없음)
+- 브릿지가 정적 파일도 같이 서빙 → 사용자 1 명령(`npm run bridge`)으로 시뮬+브릿지 동시 기동, file:// CORS 이슈도 자연 해결
+- MAVLink v1 직접 구현 (v2 아님): 5개 메시지(HEARTBEAT/ATTITUDE/GLOBAL_POSITION_INT/VFR_HUD/GPS_RAW_INT)만 필요. CRC-16/MCRF4XX는 표준 검사값 0x6F91("123456789")로 TDD 검증
+- 좌표 매핑: 시뮬 +X=East, -Z=North, +Y=Up → 측지 좌표 변환. 홈 RKSI(인천 37.46°/126.44°)로 고정, env로 오버라이드 가능
+- 텔레메트리는 fail-silent: 브릿지 미동작 시 시뮬 영향 없음, HUD에 "QGC OFFLINE" 표시
+- 단방향만 구현 (M6). QGC → 시뮬 명령 추종은 M7로 분리 (사용자 만족도 확인 후)
+**Next**:
+- 사용자 검증: QGC 다운로드 → `npm run bridge` → 자동 연결 → 지도에서 항공기 움직이는지 확인
+- 만족 시 M7: QGC mission/setpoint 수신 → 자동 항법 (양방향)
+**Notes**:
+- 사용자 확인 항목 (Mac Mini):
+  1. QGroundControl 설치 (https://qgroundcontrol.com)
+  2. 터미널: `cd flight-sim2 && npm run bridge` → "Sim served at: http://localhost:8765/" 로그 확인
+  3. QGC 실행 → 자동 연결 안 되면 Application Settings → Comm Links → "UDP" 추가 (port 14550)
+  4. 브라우저 http://localhost:8765/ 접속 → HUD 우상단 "QGC LINK" (초록) 표시
+  5. 비행 시 QGC 지도 위 항공기 이동 / 인공수평계 / VFR_HUD 게이지 실시간 동기 확인
+- macOS 첫 실행 시 보안 경고 가능 (System Settings → Privacy & Security → "Open Anyway")
+- 브릿지 5초마다 텔레메트리 카운터 로그 출력 ("LIVE · telemetry msgs sent: N")
+- MAVLink CRC_EXTRA 값은 message.xml에서 추출한 상수 (HEARTBEAT=50, ATTITUDE=39, GLOBAL_POSITION_INT=104, VFR_HUD=20, GPS_RAW_INT=24)
+
+---
+
+## 2026-04-27 23:00 — M7 (부분): QGC ↔ 브릿지 양방향, "Ready" 만족 응답기
+
+**Status**: GREEN
+**Files changed**: bridge/mavlink.mjs (디코더 + 5개 응답 인코더 추가), bridge/server.mjs (UDP bind + 응답 디스패처), tests/mavlink.test.mjs
+**Tests**: 9 added, 33 total passing, 0 failing
+**Decisions**:
+- 사용자 보고: QGC 연결 후 PARAM 다운로드 절반에서 "준비되지 않음" 멈춤 → 단방향이라 응답 못 해서 timeout
+- 최소 응답기 셋: PARAM_REQUEST_LIST → 1 dummy param(SIM_INFO=1.0), MISSION_REQUEST_LIST → MISSION_COUNT(0), COMMAND_LONG → COMMAND_ACK(ACCEPTED) + cmd 520(REQUEST_CAPABILITIES)이면 AUTOPILOT_VERSION, cmd 410(GET_HOME)이면 HOME_POSITION
+- UDP는 14555에 bind (env override). QGC 가 보낸 응답이 이 포트로 돌아옴. 송신은 그대로 14550
+- MAVLink 디코더는 v1만 파싱, v2는 인식해서 skip만 (CRC 미검증 — 신뢰 링크 가정). 9개 테스트로 layout/roundtrip/v2-skip 검증
+- M7 전체 (자동항법/RC override 추종)는 차후. 이번엔 "QGC가 Ready로 보이고 텔레메트리 정상 표시"가 목표
+- Smoke test (가짜 GCS↔브릿지 UDP 왕복)는 현재 환경 UDP 샌드박스로 검증 불가, 사용자 Mac Mini 실측에 의존
+**Next**:
+- 사용자 검증: 브릿지 재시작 + QGC 재연결 → "Ready" 상태 도달 + 지도/HUD 정상 표시
+- (성공 시) M7 양방향 본편: QGC mission/setpoint 수신 → 시뮬 자동 추종
+**Notes**:
+- 사용자 절차:
+  1. 터미널에서 `Ctrl+C` 로 기존 브릿지 종료 → `npm run bridge` 재실행
+  2. QGC 재시작 (Auto-Connect로 재연결)
+  3. PARAM 진행률이 끝까지 가는지 / "Ready"로 바뀌는지 확인
+  4. 브릿지 로그에 `tx=N rx=M` 형태 표시 — rx > 0 이면 QGC가 query 보내고 우리 응답 처리 중
+  5. Fly view 에서 지도 위 vehicle 1 위치 / 인공수평계 / VFR_HUD 게이지 실시간 동기 확인
+- bind 포트 충돌(누가 14555 점유) 시 `BIND_PORT=14600 npm run bridge`
+
+---
+
+## 2026-04-27 23:45 — M7: QGC Plan 양방향 (미션 업로드 → 자동비행 → 진행 보고)
+
+**Status**: GREEN
+**Files changed**: bridge/mavlink.mjs (mission encoders/decoders + decodeCommandLong), bridge/server.mjs (state machine, SSE, mode tracking, MISSION_CURRENT/REACHED 송출), src/autopilot.js (new), src/missionLink.js (new), src/main.js (autopilot 훅), src/hud.js (MODE/WP 셀), index.html (HUD), tests/mavlink.test.mjs, README.md
+**Tests**: 7 added, 40 total passing, 0 failing
+**Decisions**:
+- 통신 경로 (브릿지 → 브라우저): WebSocket 대신 **Server-Sent Events** 사용 (`GET /commands`). 브라우저 `EventSource` 빌트인이라 외부 의존성 0
+- 미션 프로토콜 v1 사용 (MISSION_ITEM_INT 37바이트, no mission_type extension). MISSION_REQUEST(40)/MISSION_ITEM(39) 구식 변형은 미지원
+- HEARTBEAT autopilot=8(INVALID) → 0(GENERIC) 으로 변경: INVALID는 비-vehicle 컴포넌트용. QGC가 mission/mode 처리를 더 자연스럽게 받음
+- base_mode 비트 추적: MANUAL+ARMED 가 기본, MISSION_START 받으면 AUTO+ARMED. ARM_DISARM/SET_MODE/DO_SET_MODE 명령으로도 갱신
+- Autopilot은 단순 P-제어: roll = headingErr × 1.5 (한계 0.85), pitch = altErr × 0.04 (한계 -0.4..0.6), throttle은 속도 50m/s 크루즈 유지. 실제 PID 미사용 — MVP 충분
+- Waypoint 도달 판정: 수평 120m / 수직 50m. 너무 좁으면 fly-by 시 통과 못함
+- Frame 0 / Frame 3 처리: QGC plan view 기본은 RELATIVE_ALT_INT(3)
+- AUTO 시 키보드 무시: controls.{pitch,roll,yaw,throttle} 매 프레임 autopilot 출력으로 override
+**Next**:
+- 사용자 검증: QGC Plan 만들기 → Upload → Start Mission → 자동비행 확인
+- 후속: takeoff/land 명령 특수처리 (현재는 일반 waypoint 처럼 처리), loiter/RTL, 실제 arm 시퀀스, RC override 가이드 모드, 미션 다운로드(QGC 가 시뮬에서 미션 읽기)
+**Notes**:
+- 사용자 절차:
+  1. 브릿지 + QGC 재시작 (autopilot=GENERIC 적용 위해)
+  2. 브라우저 새로고침 → HUD 하단에 `MODE: MANUAL  WP: —` 셀 추가됨 확인
+  3. QGC 좌측 **Plan** 메뉴 → 지도에 waypoint 찍기 → 우상단 **Upload**
+  4. 업로드 성공 시 시뮬 HUD `WP: 0/N`, 브릿지 로그에 `mission uploaded: N items`
+  5. QGC **Fly** 로 복귀 → **Start Mission** 클릭 (또는 confirm slider)
+  6. HUD `MODE: AUTO` (초록), `WP: 1/N` 으로 진행, 비행기가 waypoint 따라 이동
+  7. QGC 지도에서 항공기 위치 변화 + waypoint 도달 시 다음으로 진행
+- 미션이 너무 가까운 곳부터 시작하면 도달 반경(120m) 안에서 시작 → 즉시 통과해 다음으로 점프할 수 있음. 첫 waypoint는 충분히 떨어진 곳에 두기
+- AUTO 진입 시 만약 지상 정지 상태면 throttle 100% 가속 + 작은 pitch up → 자연스럽게 이륙. 활주로 방향과 첫 WP 방향이 너무 다르면 활주로 벗어날 수 있음
+- 테스트는 단위 레벨까지만 (실 통신은 사용자 Mac Mini 실측으로 검증)
+
+---
+
+## 2026-04-28 00:10 — M7 hotfix: QGC "Guided not supported" 우회 (M 키 시작)
+
+**Status**: GREEN
+**Files changed**: src/controls.js, src/main.js, index.html
+**Tests**: 40 passing (no new — keyboard shortcut + dispatch만)
+**Decisions**:
+- 사용자 보고: QGC "Start Mission" → "Guided mode not supported by Vehicle"
+- 원인: QGC Generic firmware plugin의 `supportsGuidedMode()` 가 false. Start Mission 시 GUIDED 모드 진입을 client-side에서 시도하므로 우리 MAVLink 응답과 무관하게 막힘. autopilot 타입을 ArduPilot/PX4 로 바꾸면 우회 가능하지만 param sync 등 다른 firmware-specific 기대치가 깨질 위험
+- 결정: 시뮬 측 키보드 'M' (start), 'N' (abort) 추가하여 미션 시작 트리거를 로컬에서 발사. QGC는 Plan 업로드 + 진행 모니터링 (MISSION_CURRENT/REACHED) 만 사용. 가장 단순/안전한 경로
+- autopilot 타입은 GENERIC(0) 유지 — 이전에 어렵게 도달한 "Ready" 상태 보존
+**Next**:
+- 사용자 검증: Plan upload → M 키 → 자동비행 + QGC 지도에서 진행 추적
+- (선택) 후속: autopilot=ArduPilot(3) 토글 옵션 + ArduPlane 커스텀 모드(AUTO=10) 처리 → QGC Start Mission 버튼 직접 동작
+**Notes**:
+- 사용자 절차:
+  1. 브라우저 하드 새로고침
+  2. QGC Plan 업로드 (이미 동작 확인됨)
+  3. QGC Start Mission 슬라이더 무시 (또는 시도해서 에러 확인)
+  4. 시뮬 창 클릭해서 포커스 → **M 키** 누름
+  5. HUD `MODE: AUTO` (초록) + 비행 시작, QGC 지도에서 항공기 이동 + WP 진행 동기 확인
+  6. 중단 원하면 N 키 (또는 R 로 리셋)
+
+---
+
+## 2026-04-28 00:30 — M7 hotfix #2: autopilot barrel-roll 수정 (cascade controller)
+
+**Status**: GREEN
+**Files changed**: src/autopilot.js (재작성), src/main.js
+**Tests**: 40 passing (autopilot은 visual 검증)
+**Decisions**:
+- 사용자 보고: M 키로 미션 시작하면 비행기가 빙글빙글 회전(barrel roll)하면서 앞으로만 가고 waypoint 방향으로 turn 안 함
+- 원인: 1-loop P 제어가 heading 오차 → 직접 roll rate 명령. heading err = π일 때 roll cmd가 한계(0.85)에 saturate → 뱅크가 90° 넘어 inverted → barrel roll → 실제 turn 없음
+- 해결: cascade (outer→inner) 2-loop 컨트롤러
+  - Outer: heading_err → desired_bank (clamp ±35°) ; alt_err → desired_pitch (clamp ±15°)
+  - Inner: bank_err × Kp − rollRate × Kd → roll cmd ; pitch_err × Kp − pitchRate × Kd → pitch cmd
+- bankRad/pitchRad는 quaternion에서 직접 계산 (Euler YXZ 부호 모호성 회피): pitch = asin(fwd.y), bank = −asin(right.y) ("+ = 우측 날개 다운" 규약)
+- rollRate 부호: 시뮬 ω.z 가 + 일 때 LEFT roll (body +Z 회전). 항공 규약 "+ = right roll"에 맞추려면 −ω.z
+- 게인: HEADING_TO_BANK=0.9, BANK_KP=1.6, ROLL_RATE_KD=0.35 (대충 underdamped 안 되도록 보수적)
+**Next**:
+- 사용자 검증: M 키 → 안정한 banked turn → waypoint 정확 도달
+- 안 되면 게인 미세조정 (보통 KP/KD 비율)
+**Notes**:
+- 만약 여전히 oscillation 보이면 BANK_KP를 1.0~1.2로 낮추고 ROLL_RATE_KD를 0.5로 올리기
+- waypoint 너무 가까이(<200m) 두면 첫 도달이 즉시 일어나 다음 wp로 점프할 수 있음
+- 첫 waypoint 거리가 충분(>500m)하면 plane이 우선 어느 방향으로든 banking 시작 → heading 맞으면 wings level → 직진
+
+---
+
+## 2026-04-28 00:55 — M7 hotfix #3: TAKEOFF phase 추가 (지상에서 banking 금지)
+
+**Status**: GREEN
+**Files changed**: src/autopilot.js, src/main.js
+**Tests**: 40 passing
+**Decisions**:
+- 사용자 보고: M 누르면 비행기가 옆으로 기울어진 채 활주로를 기어가고 waypoint 방향으로 안 감
+- 근본 원인: autopilot이 NAV 단계만 있고 이륙(TAKEOFF) 단계가 없음. 지상 정지 상태에서 첫 waypoint가 옆에 있으면 헤딩 오차 → 즉시 banking 명령 → 활주로 위에서 기울어진 채 가속만 → 양력 기울어 sideways slide
+- 해결: alt AGL < 30m 동안은 TAKEOFF 단계 — wings level 강제, rotate speed (25 m/s) 도달 후 8° pitch up, full throttle. 30m 넘으면 NAV로 자동 전환
+- 단계는 IDLE / TAKEOFF / NAV / DONE 4가지. HUD에 `MODE: AUTO·TAKEOFF` 형태 표시
+- 활주로 방향과 첫 waypoint 방향이 크게 다르면 일단 활주로 방향(현재 -Z=북)으로 climb out 후 turn — 효율적이진 않지만 안정적
+**Next**:
+- 사용자 검증: M → TAKEOFF (HUD 표시) → 30m 넘으면 NAV → waypoint 따라 비행
+- 후속: 활주로 방향 + 첫 wp 방향에 따라 takeoff 방향 최적화 (지금은 항상 정면), 착륙(LAND cmd 21) 처리
+**Notes**:
+- 사용자 절차: 브라우저 새로고침 → QGC plan 그대로 → M → 활주로 직진 가속 → 30m 상승 → waypoint 향해 banked turn 시작
+- 만약 첫 waypoint가 활주로 뒤(spawn 남쪽)에 있으면 plane이 일단 북쪽으로 climb out 후 180° turn해서 돌아옴 (시간 좀 걸림). 첫 wp는 활주로 정면(spawn 북쪽 즉, 지도상 위쪽) 1km 이상 떨어진 곳 권장
+- TAKEOFF 동안 키보드는 여전히 무시됨 (autopilot이 controls 매 프레임 덮어씀)
+
+---
+
+## 2026-04-28 02:00 — M8: 충돌/데미지 + 그래픽 업그레이드
+
+**Status**: GREEN
+**Files changed**: src/collision.js (new), src/damage.js (new), src/effects.js (new), src/world.js (rewrite, 스카이/HemisphereLight/노이즈 terrain/varied buildings/snow caps), src/aircraft.js (rewrite, 디테일/wingtip lights/strobe/exhaust pipe/anchors), src/main.js (충돌·데미지·effects 통합), src/hud.js (damage bars), index.html (damage HUD), tests/collision.test.mjs (new), tests/damage.test.mjs (new)
+**Tests**: 18 added (10 collision + 7 damage + integration sanity), 58 total passing, 0 failing
+**Decisions**:
+- 미션 네비게이션은 보류(M9), 본체 시뮬+그래픽 우선 — 사용자 요청
+- 충돌: 항공기 sphere(r=5.5m) vs 정적 box(빌딩) / cone(산) 검사. world.js가 빌딩/산 생성 시 colliders 레지스트리에 등록 → main loop가 매 프레임 1회 검사 (공간 분할 X — 100개 정도라 선형 충분)
+- 데미지 모델: 5 component (fuselage/leftWing/rightWing/tail/engine) 각 0..1 HP. 충돌 점을 body frame으로 역변환 후 classifyHit() 으로 부위 결정
+- 데미지 → 물리 영향:
+  - leftWing/rightWing HP 차이 → 비대칭 양력 (강한 쪽이 weaker 쪽으로 roll torque 유발 — 실제 항공기 단발 엔진 파손 시 yaw 와 비슷한 핸들링)
+  - engine HP → thrust 비례 감소 + 0.05 미만 시 프로펠러 정지
+  - tail HP → 조종 authority 감소 (최저 0.2 보장 — 적분기 발산 방지)
+  - fuselage HP=0 → CRASH 상태 + 폭발 파티클 + 시뮬 정지
+- 파티클: PointsMaterial + CanvasTexture 로 sprite (외부 자원 X). ring-buffer pool. smoke/fire/sparks/exhaust 4종. fire는 AdditiveBlending
+- 그래픽:
+  - 스카이: ShaderMaterial 그라데이션 (zenith→horizon→ground) + 태양 disc + halo
+  - 라이팅: HemisphereLight + DirectionalLight + AmbientLight 조합
+  - Terrain: PlaneGeometry 80×80 세그먼트에 sin/cos noise 적용 (활주로 corridor는 평탄화)
+  - 빌딩: 60→70개, tower variant (좁고 높음) 25%, 옥상 HVAC, 색 팔레트 6색
+  - 산: 35개, h>800m 인 봉우리는 snow cap 추가
+  - 항공기: 분리된 leftWing/rightWing/tail group (데미지 시 visibility off), wingtip nav lights (R=red/L=green), tail strobe (1.6Hz), pitot, 안테나, exhaust pipe, body 색 + 액센트 + 스트라이프
+- 충돌 시 시각/물리 처리: spark 18개 + smoke 6개 burst, normal 방향 push out + restitution 0.15 + 0.55배 속도 감속
+- 부위 destroyed (HP<0.05): mesh.visible=false → "찢어진" 시각 효과 + smoke burst 30개
+- HUD: 우상단 INTEGRITY 박스 5개 bar (FUS/L·WG/R·WG/TAIL/ENG), HP에 따라 초록/노랑/빨강
+**Next**:
+- 사용자 시각 검증: 그라데이션 스카이, 산 snow cap, 빌딩 다양성, 항공기 디테일, 비행 중 exhaust, 빌딩 충돌 시 spark+smoke+wing 사라짐, 추락 시 폭발
+- 후속: 수면(바다), 텍스처드 활주로, 사운드, 지형 LOD, instancedMesh로 빌딩 50개+ 최적화 (지금은 70개 직접)
+**Notes**:
+- 사용자 절차: 브라우저 하드 새로고침(Cmd+Shift+R)
+- 빌딩 충돌 시도: 활주로 좌측/우측 빌딩 군집으로 일부러 향해 비행. 빌딩에 스치면 spark + 날개 데미지, 정면 박치기면 폭발
+- 테스트는 collision/damage 단위 함수만. 시각/감각은 사용자 실측
+- 성능 우려: PointsMaterial 4종 × 80~220 pool = ~580 particles 풀. 60fps Mac Mini M4 충분. 만약 떨어지면 max 값 줄이기
+
+---
+
+## 2026-04-28 03:00 — M9 Phase A: 텔레메트리 레코더 + HITL 채널 (SaaS 파이프라인)
+
+**Status**: GREEN
+**Files changed**: src/recorder.js (new), src/hitl.js (new), src/missionLink.js (HITL attach), src/main.js (recorder/replay/HITL 통합), src/controls.js (F/L/H/Y 키), src/hud.js (REC/REPLAY/HITL 인디케이터), index.html (HUD), bridge/server.mjs (/hitl/state POST → SSE broadcast), examples/hitl-producer.mjs (new), tests/recorder.test.mjs (new)
+**Tests**: 9 added (recorder), 67 total passing
+**Decisions**:
+- 사용자: "전부 다, 체계적으로" → 5단계 phase 로 분할 (A: SaaS 인프라, B: 사운드/패드, C: AI/시나리오, D: 콕핏/다중기, E: VR/멀티)
+- Phase A: PRD §1 SaaS 각도 본격 — 외부 sim/FPGA가 web 시뮬을 viewer로 쓰는 것 + 비행 데이터 레코딩 → CSV → MATLAB/LabVIEW 분석
+- Recorder: ring buffer 36000 entries (30분 @ 20Hz). 메모리 cap. 시간 정렬 보장 (head/count). Pure data, 9개 unit test로 동작 보장
+- Replay: physics 우회, findAt(buffer, t) 로 가장 가까운 snapshot pose 적용. 카메라/effects/HUD는 그대로 동작
+- HITL: 외부 producer가 POST `/hitl/state` JSON → bridge가 SSE event로 broadcast → browser hitl.js가 latest 보유 → main loop에서 H 키 누르면 physics 우회하고 외부 state 추종. 기존 missionLink SSE 연결 공유 (이중 EventSource 회피)
+- 키 매핑: F=record toggle, L=replay toggle, Y=CSV export, H=HITL toggle. 기존 R/V/P/M/N과 충돌 없음
+- examples/hitl-producer.mjs: Node 스크립트, 600m 반경 climbing circle 패턴 50Hz POST. LabVIEW/FPGA producer 모형. 외부 의존성 0
+**Next**:
+- 사용자 검증: 비행 → F → 비행 → F (stop) → L (replay 카메라가 과거 비행 재생) → Y (CSV 다운로드)
+- 외부 producer 검증: `node examples/hitl-producer.mjs` (다른 터미널) → H 키 → 항공기가 외부 스크립트 패턴대로 비행
+- Phase B 시작 (사운드 + 게임패드)
+**Notes**:
+- Recorder는 R 리셋과 무관 — 추락해도 그 시점까지 데이터 보존됨
+- HITL 모드에서 충돌/데미지는 우회됨 (외부가 진실의 원천이라 브라우저는 그리기만)
+- HITL state 스키마: `{ x, y, z, qw/qx/qy/qz (또는 yawRad/pitchRad/rollRad fallback), throttle01, vsi, ... }` — 모든 필드 옵션
+- CSV 헤더: `t, x, y, z, vx, vy, vz, qx, qy, qz, qw, speed, altitude, throttle01, aoa, gForce, vsi, fusHp, lWingHp, rWingHp, tailHp, engHp, status`
+
+---
+
+## 2026-04-28 03:45 — M9 Phase B: 사운드 (Web Audio 절차적) + 게임패드/플라이트 스틱
+
+**Status**: GREEN
+**Files changed**: src/audio.js (new), src/gamepad.js (new), src/main.js (audio/pad 통합), src/controls.js (X 키), src/hud.js (PAD/MUTE 인디케이터), index.html (HUD), tests/gamepad.test.mjs (new)
+**Tests**: 8 added (gamepad axis 매핑/데드존), 75 total passing
+**Decisions**:
+- 사운드: 외부 샘플 파일 0, OscillatorNode + 필터 + buffered noise 만으로 절차적 생성. AudioContext 는 사용자 첫 입력(키/마우스/터치)에서 lazy boot — 자동재생 정책 회피
+- 채널: ENGINE (sawtooth × 2 detuned, lowpass), WIND (white noise loop, lowpass), STALL (square 880Hz, 4Hz pulse), IMPACT (1-shot filtered noise burst), EXPLOSION (3-stage stacked impact)
+- 엔진 손상 시 cutoff 낮추고 ±wobble 추가 → "choke" 사운드. HP=0 이면 정지
+- 풍절음 곡선: speed^1.4, 10 m/s 이하 silent, 80 m/s 부근 peak. cutoff 도 속도와 함께 상승 → "휘파람" 톤
+- 게임패드 매핑 (XInput / 일반 플라이트 스틱 양쪽 호환):
+  - axis 0 → roll, axis 1 inverted → pitch (forward stick = 코업), axis 2 → yaw
+  - 트리거 buttons[6/7] → throttle (RT - LT*0.5)
+  - 트리거 없으면 axis 3 fallback ((1-axis)/2 — flight-stick 슬라이더 -1=max)
+- 키보드와 자동 병행: 게임패드 axis가 데드존 밖일 때만 해당 채널 override. 정지된 axis는 키보드 그대로. 트리거 누르지 않으면 throttle null → 키보드 ↑/↓ 유지
+- HUD 인디케이터: 좌측 세로열 (REC, REPLAY, HITL, PAD, MUTE)
+- X 키: 오디오 mute 토글
+**Next**:
+- 사용자: 비행 시 엔진 사운드 + 풍절음 + 충돌 임팩트 확인. 게임패드 꽂으면 PAD 인디케이터 (초록) + 스틱 즉시 반응
+- Phase C 시작 (AI 트래픽 + 시나리오 + AP 정확도 fix)
+**Notes**:
+- Safari 의 webkit prefix audio 자동 fallback 처리. 브라우저 음소거되어도 코드는 OK
+- 폴링 부하: navigator.getGamepads() 매 프레임 호출 — XInput 패드 4개라도 60fps 영향 미미
+- 사용자 절차: 브라우저 새로고침 → 아무 키 눌러 audio boot → 엔진 켜기 → 사운드 확인. 게임패드 USB 꽂으면 자동 인식
+- 데드존 0.08 (8%) — 일반 컨슈머 패드 드리프트 흡수
+- 플라이트 스틱별 axis 매핑이 다를 수 있음. 콘솔에 "[gamepad] connected: ID (N axes, M buttons)" 출력으로 확인 가능
+
+---
+
+## 2026-04-28 04:30 — M9 Phase C+D+E: AI트래픽 / 시나리오 / 드론 / PFD / VR / 멀티플레이 / terrain
+
+**Status**: GREEN
+**Files changed**: src/aiTraffic.js (new), src/scenario.js (new), src/drone.js (new), src/multiplayer.js (new), src/world.js (4-octave fbm + vertex color), src/hud.js (heading rose + tape ticks + scenario/MP HUD), src/autopilot.js (gain/threshold 조정), src/main.js (모든 모듈 통합 + WebXR setAnimationLoop), src/controls.js (Z/T/G/J 키), bridge/server.mjs (/mp/state POST), index.html (HUD)
+**Tests**: 75 passing (변경 없음 — 모두 시각/감각 영역)
+**Decisions**:
+- 사용자 "전부 다 묻지말고" → C/D/E 한 세션에 묶어 처리. MVP 수준 + 통합 작동 확인 (단 시각/감각은 사용자 검증 필요)
+- AP fix: ARRIVAL 80m, MAX_BANK 40°, BANK_KP 2.0, HEADING_TO_BANK 1.4 (이전 0.9에서 상향). 더 적극적 turn
+- AI 트래픽: 5대 mini-aircraft, kinematic 원형 패턴 (반경 600-2000m, 고도 200-800m, 속도 38-70 m/s, 일부 CCW/CW). 충돌검사 X, 시각용
+- 시나리오: 3개 코스 (Pattern, Slalom, Climb Test). 객체 타입: altitude/gate. 도달 시 점수 + 정확도 보너스, 완료 시 시간 보너스 (5000-경과초×8)
+- 드론: 별도 물리 (멀티콥터, 공력 X, 추력 vectoring). Z 키로 토글, 메시 swap. 호버 추력 = 중량
+- 글래스 콕핏: heading rose (±60° arc, 5°/10°/30° tick), 속도 tape (5 m/s tick), 고도 tape (25m tick). 기존 피치 사다리 위에 overlay
+- WebXR: renderer.xr.enabled + setAnimationLoop. immersive-vr 지원 시 우하단 "Enter VR" 버튼 자동 생성. (Meta Quest browser, Vision Pro 등에서 시도 가능)
+- 멀티플레이: bridge가 `/mp/state` POST 받아 SSE event 'mp_state' broadcast. 각 peer는 자기 pose 10Hz 송신, 다른 peer ghost mesh 표시. 5초 stale → mesh 제거
+- terrain: 4-옥타브 fractal noise (sin/cos sums), elevation별 vertex color (잔디→흙→바위→눈)
+**Next**:
+- 사용자: 모든 키 조합 시연 검증 (Z 드론, T 시나리오 사이클, G 시작, J 멀티플레이, "Enter VR" 버튼)
+- 만약 너무 많아 혼잡하면 HUD 간소화 / 키 재배치 후속
+**Notes**:
+- 키 매핑 충돌 X: W/A/S/D/Q/E (조종), ↑↓ (스로틀), R/V/P (시뮬), M/N (미션), F/L/Y (레코더), H (HITL), X (mute), Z (vehicle), T/G (시나리오), J (multi)
+- 멀티플레이 검증법: 같은 브릿지에 두 브라우저 (탭 / 두 기기) 접속 → 둘 다 J 키 → 서로 ghost 보임
+- VR 검증: Meta Quest의 Meta Quest Browser, Apple Vision Pro Safari, 또는 PC + WebXR 호환 헤드셋
+- 시나리오 검증: T로 코스 cycle (콘솔 로그) → G로 시작 → 게이트 통과 시 SCORE 증가. Pattern 코스가 추천
+- AI 트래픽: 매 spawn 랜덤이라 재시작마다 다른 위치. 빌딩과 겹칠 수 있음 (시각만이라 무관)
+
+---
+
+## 2026-04-28 12:00 — 교육 자료 작성 (FLIGHT-SIM-PRIMER)
+
+**Status**: GREEN (코드 변경 없음, 문서만)
+**Files changed**: docs/FLIGHT-SIM-PRIMER.md (new), docs/FLIGHT-SIM-PRIMER.pdf (new), build/build-primer.sh (new)
+**Tests**: 75 passing (변경 없음)
+**Decisions**:
+- 사용자 요청: 비행 시뮬 분야 입문자를 위한 종합 교육 자료. md + pdf 두 포맷
+- 구성: 분야 개요 → 우리 프로젝트 위치 → 사용된 기술의 배경 → 산업체 (글로벌 + 한국) → 오픈소스 생태계 → MAVLink 표준 → 코드와 학문적 출처 매핑 → 실무 개발 방식 → 인증/표준 → 학습 경로
+- 한국 방산/UAM 회사 (KAI, LIG Nex1, 한화시스템, 두산모빌리티이노베이션 등) 별도 섹션 — 사용자 컨텍스트
+- PDF 생성: pandoc으로 MD → HTML → Chrome headless --print-to-pdf. 한글 폰트는 macOS 기본(AppleGothic) 자동 fallback
+- build/build-primer.sh: 재생성 스크립트. md 수정 후 한 명령으로 pdf 갱신
+**Next**:
+- 사용자: docs/FLIGHT-SIM-PRIMER.md (또는 .pdf) 읽고 모르는 부분 / 더 알고 싶은 부분 알려줌 → 챕터 추가 / 심화
+- 코드 작업 다시 가는 방향이면 추천 마일스톤 (실제 지형 데이터, JSBSim 통합, 콕핏 텍스처드 인테리어 등) 중에서 선택
+**Notes**:
+- PDF는 build/build-primer.sh 로 재빌드. 의존: pandoc + Chrome (둘 다 macOS에 일반적)
+- MD가 single source of truth — PDF는 derived
+
+---
+
+## 2026-04-28 13:30 — INDUSTRY-REPORT 작성 (리서치 기반)
+
+**Status**: GREEN (문서 추가만)
+**Files changed**: docs/INDUSTRY-REPORT.md (new, ~7000 단어), docs/INDUSTRY-REPORT.pdf (new), build/build-report.sh (new), docs/FLIGHT-SIM-PRIMER.md (§4 head에 보고서 링크)
+**Decisions**:
+- 사용자 요청: §4 "실세계 회사들" 만 리서치/연구 기능으로 제대로 — **국내 중요**
+- WebSearch 7-8회 실행: KAI/도담/한화/LIG/슈퍼널/Plana/DMI/니어스랩/파블로/KARI/ADD + CAE/L3Harris/Asobo/PX4
+- 핵심 발견: **도담시스템스가 국내 시뮬 시장 95% 점유 (KAI 분사)**, KAI×에픽게임즈 MOU(2023.03), CAE Prodigy Level D 인증(2024), 슈퍼널 FAA 인증, 니어스랩 세계 100대 드론 방산 (2025)
+- 모든 주장에 출처 URL 표기. 시장 수치는 출처별 차이 있어 범위로
+- 각 회사 섹션마다 "우리 프로젝트와의 관계" 1단락 — 사용자가 비즈니스 각도 잡는 데 도움
+- 보고서 마지막 §5 "한국 시장의 기회": 도담/CAE 직접 경쟁 불가 → 시각화 어댑터/HITL/멀티-vehicle 군집/UAM 데모/교육이 비어있는 시장 식별 + 비즈니스 모델 표
+**Next**:
+- 사용자가 보고서 읽고 추가 회사 / 더 깊은 챕터 / 비즈니스 각도 등 요청 → 후속
+- 또는 코드 작업 (M10 JSBSim 등) 으로 복귀
+**Notes**:
+- 입문서 §4 head에 보고서 링크 추가 — 입문서는 요약, 보고서는 심층
+- 출처 모두 한국 매체 + 글로벌 영문 매체 양쪽. 위키 의존 최소
+- 정부/공공자료 (KARI, 정책브리핑, 비즈한국 단독 등) 포함
+
+---
+
+## 2026-04-28 14:30 — PEERS-LANDSCAPE 작성 (우리 모델 직속 동류만)
+
+**Status**: GREEN
+**Files changed**: docs/PEERS-LANDSCAPE.md (new, ~6500 단어), docs/PEERS-LANDSCAPE.pdf (new), build/build-peers.sh (new)
+**Decisions**:
+- 사용자 클래리피케이션: "지금 우리가 하고 있는 시뮬 모델 관련해서" — 광역 산업 X, 우리 기술 시그니처와 일치하는 peer만
+- 우리 시그니처 5개로 정의: 웹 실행 + 자체 3D 렌더 + 코드급 공력 + MAVLink + HITL/SITL
+- 4 그룹으로 분류:
+  - A. 웹 비행 시뮬 OSS (GeoFS, dimartarmizi, Jakob Maier, phuang17)
+  - B. 웹 MAVLink GCS (Helios, WebGCS, ADOS, Mavelous, NodeJS-WS-GCS)
+  - C. 상용 SaaS (Auterion Virtual Skynode, Sky-Drones, Project AirSim/IAMAI, Cesium 진영)
+  - D. 한국 진영 (파이온, 두산DI, dstlabs, 자이언트, 포스웨이브, 이노시뮬, KAI LVC)
+- 가장 직접적 peer 3개 식별: GeoFS (웹 비행), Helios GCS (웹 MAVLink), Auterion Virtual Skynode (HITL+웹)
+- Auterion px4-jsbsim-bridge가 우리 M10 (JSBSim 통합) reference로 정확히 fit
+- 13×8 feature 매트릭스로 한 눈에 비교 — 우리만 갖춘 것: 단일 HTML 배포, 데미지/시나리오/사운드, 코드급 공력+MAVLink+HITL 모두
+- §6 갭 분석 + §7 실행 추천 (단기/중기/장기)
+- 한국 정부 LVC R&D 사업 (ScienceON 보고서) 포착 — 우리 fit 영역 강한 시그널
+**Next**:
+- 사용자: peer 추가 / 시연 메일 초안 / 비즈니스 각도 더 등 요청 → 후속
+- 또는 코드 작업 (M10 JSBSim) 으로 복귀
+**Notes**:
+- INDUSTRY-REPORT 와 PEERS-LANDSCAPE 분리: 전자=광역 산업, 후자=직접 동류
+- 입문서 §4도 두 보고서로 링크 (이미 INDUSTRY 링크 있음, PEERS는 추가)
+- Auterion Virtual Skynode 재발견이 가장 큰 통찰 — 우리 모델이 새롭지 않다 (이미 상용으로 존재) 단 lock-in/접근성에서 차별화 가능
+- 한국 진영: GCS는 많지만 시뮬+GCS 결합은 비어있음 — 정확한 진입 갭

@@ -1,0 +1,11 @@
+{
+  "name": "flight-sim2",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "bridge": "node bridge/server.mjs",
+    "start": "node bridge/server.mjs"
+  }
+}

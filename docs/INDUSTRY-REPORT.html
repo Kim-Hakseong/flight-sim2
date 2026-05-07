@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ko" xml:lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="리서치 기반 정리" />
+  <meta name="dcterms.date" content="2026-04-28" />
+  <title>비행 시뮬레이션 산업 보고서 (국내 중심)</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="data:text/css;base64,QHBhZ2UgeyBzaXplOiBBNDsgbWFyZ2luOiAyMm1tIDE4bW0gMjJtbSAxOG1tOyB9CmJvZHkgewogIGZvbnQtZmFtaWx5OiAtYXBwbGUtc3lzdGVtLCAiQXBwbGVTREdvdGhpY05lby1SZWd1bGFyIiwgIkFwcGxlIFNEIEdvdGhpYyBOZW8iLAogICAgICAgICAgICAgICAiSGVsdmV0aWNhIE5ldWUiLCAiTm90byBTYW5zIENKSyBLUiIsIHNhbnMtc2VyaWY7CiAgZm9udC1zaXplOiAxMC41cHQ7CiAgbGluZS1oZWlnaHQ6IDEuNTU7CiAgY29sb3I6ICMyMjI7CiAgbWF4LXdpZHRoOiA3NjBweDsKICBtYXJnaW46IDAgYXV0bzsKfQpoMSB7IGZvbnQtc2l6ZTogMjBwdDsgYm9yZGVyLWJvdHRvbTogMnB4IHNvbGlkICMzMzM7IHBhZGRpbmctYm90dG9tOiA2cHg7IG1hcmdpbi10b3A6IDI2cHQ7IHBhZ2UtYnJlYWstYmVmb3JlOiBhbHdheXM7IH0KaDE6Zmlyc3Qtb2YtdHlwZSB7IHBhZ2UtYnJlYWstYmVmb3JlOiBhdm9pZDsgfQpoMiB7IGZvbnQtc2l6ZTogMTVwdDsgbWFyZ2luLXRvcDogMThwdDsgY29sb3I6ICMxYTNkN2E7IGJvcmRlci1ib3R0b206IDFweCBzb2xpZCAjY2NkOyBwYWRkaW5nLWJvdHRvbTogM3B4OyB9CmgzIHsgZm9udC1zaXplOiAxMnB0OyBtYXJnaW4tdG9wOiAxNHB0OyBjb2xvcjogIzJhNWRhNjsgfQpoNCB7IGZvbnQtc2l6ZTogMTAuNXB0OyBtYXJnaW4tdG9wOiAxMHB0OyBjb2xvcjogIzQ0NDsgfQpwLCBsaSB7IGZvbnQtc2l6ZTogMTAuNXB0OyB9CmNvZGUgeyBmb250LWZhbWlseTogIlNGIE1vbm8iLCBNZW5sbywgQ29uc29sYXMsIG1vbm9zcGFjZTsgZm9udC1zaXplOiA5LjVwdDsKICAgICAgIGJhY2tncm91bmQ6ICNmM2YzZjM7IHBhZGRpbmc6IDFweCA0cHg7IGJvcmRlci1yYWRpdXM6IDNweDsgfQpwcmUgIHsgYmFja2dyb3VuZDogI2Y2ZjZmNjsgYm9yZGVyLWxlZnQ6IDNweCBzb2xpZCAjYWFhOyBwYWRkaW5nOiA4cHggMTJweDsKICAgICAgIGZvbnQtc2l6ZTogOXB0OyBsaW5lLWhlaWdodDogMS40NTsgb3ZlcmZsb3cteDogYXV0bzsKICAgICAgIHBhZ2UtYnJlYWstaW5zaWRlOiBhdm9pZDsgfQpwcmUgY29kZSB7IGJhY2tncm91bmQ6IHRyYW5zcGFyZW50OyBwYWRkaW5nOiAwOyB9CnRhYmxlIHsgYm9yZGVyLWNvbGxhcHNlOiBjb2xsYXBzZTsgd2lkdGg6IDEwMCU7IG1hcmdpbjogMTJweCAwOyBmb250LXNpemU6IDEwcHQ7CiAgICAgICAgcGFnZS1icmVhay1pbnNpZGU6IGF2b2lkOyB9CnRoLCB0ZCB7IGJvcmRlcjogMXB4IHNvbGlkICNiYmI7IHBhZGRpbmc6IDZweCA5cHg7IHRleHQtYWxpZ246IGxlZnQ7IHZlcnRpY2FsLWFsaWduOiB0b3A7IH0KdGggeyBiYWNrZ3JvdW5kOiAjZjBmMGYwOyB9CmJsb2NrcXVvdGUgeyBib3JkZXItbGVmdDogM3B4IHNvbGlkICMxYTNkN2E7IG1hcmdpbjogMTBweCAwOyBwYWRkaW5nOiA2cHggMTRweDsKICAgICAgICAgICAgIGNvbG9yOiAjMzMzOyBiYWNrZ3JvdW5kOiAjZjVmOGZjOyBmb250LXNpemU6IDExcHQ7IH0KaHIgeyBib3JkZXI6IG5vbmU7IGJvcmRlci10b3A6IDFweCBzb2xpZCAjY2NjOyBtYXJnaW46IDI0cHggMDsgfQpzdHJvbmcgeyBjb2xvcjogIzExMTsgfQphIHsgY29sb3I6ICMxYTNkN2E7IH0KZW0geyBjb2xvcjogIzU1NTsgfQoudGl0bGUgeyB0ZXh0LWFsaWduOiBjZW50ZXI7IH0KLnN1YnRpdGxlIHsgdGV4dC1hbGlnbjogY2VudGVyOyBjb2xvcjogIzU1NTsgfQouYXV0aG9yIHsgdGV4dC1hbGlnbjogY2VudGVyOyBjb2xvcjogIzc3NzsgZm9udC1zaXplOiAxMHB0OyB9Ci5kYXRlIHsgdGV4dC1hbGlnbjogY2VudGVyOyBjb2xvcjogIzg4ODsgZm9udC1zaXplOiA5cHQ7IG1hcmdpbi1ib3R0b206IDI0cHQ7IH0=" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">비행 시뮬레이션 산업 보고서 (국내 중심)</h1>
+<p class="subtitle">국내 중심 — 회사별 위치, 기술, 시장 (2024-2026
+기준)</p>
+<p class="author">리서치 기반 정리</p>
+<p class="date">2026-04-28</p>
+</header>
+<h1 id="executive-summary">0. Executive Summary</h1>
+<p>이 보고서는 비행 시뮬레이션 산업의 <strong>국내 플레이어를
+중심으로</strong>, 글로벌 컨텍스트와 함께 정리한 자료다. 일반
+위키/블로그 1차 정보가 아니라 2025-2026년 공식 발표, 매체 보도, 회사 IR
+자료를 직접 확인했다 (각 항목에 출처 표기).</p>
+<h2 id="핵심-발견-tldr">핵심 발견 (TL;DR)</h2>
+<ol type="1">
+<li><strong>한국 비행 시뮬레이터 시장의 진짜 1위는 KAI나 한화가 아니라
+<a
+href="#21-도담시스템스-국내-시뮬레이터-시장-1위">도담시스템스</a>다</strong>
+— 국내 항공 시뮬레이터의 <strong>95%를 납품</strong>. KAI에서 2000년
+분사한 강소기업.</li>
+<li><strong>KAI는 2023년 에픽게임즈 코리아와 MOU를 체결</strong>, KF-21
+비행 훈련에 <strong>언리얼 엔진 5 기반 VR 시뮬레이터</strong>를 도입.
+게임 엔진의 산업 시뮬 진입을 한국이 빠르게 좇고 있다.</li>
+<li><strong>CAE가 2021년 L3Harris 군용 훈련 사업부를 $1.05B에
+인수</strong> — 글로벌 군 훈련 시뮬 시장이 사실상 CAE 단일 주자로
+재편.</li>
+<li><strong>CAE Prodigy가 2024년 게임 엔진 기반 풀-플라이트 시뮬레이터로
+처음 Level D 인증</strong> 획득. 우리가 만든 Three.js 시뮬과 같은 계보의
+기술이 인증급으로 진입했다는 신호.</li>
+<li><strong>현대 슈퍼널이 2025년 FAA에서 eVTOL 인증을 획득</strong>,
+Microsoft와 AI 비행 시뮬 협업. 단, 상용화는 2028년으로 지연 + 조직
+축소.</li>
+<li><strong>한국 드론 군집 기술이 세계급</strong>: 니어스랩이 미국
+디펜스포스트 “2025년 세계 100대 드론 방산기업” 선정. 파블로항공이 군집
+조율 4단계 국내 최초 도달.</li>
+<li><strong>민간 항공 시뮬 시장은 2025년 $5.78B → 2030년
+$7.53B</strong>. 군용 포함 전체 비행 시뮬 시장은 $6.21B → $8.59B
+(2034).</li>
+</ol>
+<hr />
+<h1 id="시장-규모-2025-기준">1. 시장 규모 (2025 기준)</h1>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>시장 분류</th>
+<th>2025 규모</th>
+<th>2030/2034 예상</th>
+<th>출처</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>비행 시뮬레이터 (전체, 군+민)</td>
+<td>$6.21B</td>
+<td>$8.59B (2034)</td>
+<td>Fortune Business Insights</td>
+</tr>
+<tr>
+<td>민간 항공 비행 훈련/시뮬</td>
+<td>$5.78B</td>
+<td>$7.53B (2030)</td>
+<td>Mordor Intelligence</td>
+</tr>
+<tr>
+<td>시뮬레이터 (전 분야)</td>
+<td>$12.28B</td>
+<td>$16.79B (2030)</td>
+<td>Mordor Intelligence</td>
+</tr>
+<tr>
+<td><strong>북미 점유율</strong></td>
+<td><strong>35.85%</strong></td>
+<td>—</td>
+<td>Mordor Intelligence</td>
+</tr>
+</tbody>
+</table>
+<p>CAE가 단독으로 <strong>$11.8B 백로그</strong> (2025.09 기준), 분기
+매출 <strong>$1.09B</strong>. 한 회사가 시장의 ~20%를 차지한다는 뜻이고,
+인수합병으로 1위 격차가 벌어지는 추세.</p>
+<hr />
+<h1 id="국내-한국-산업체">2. 국내 (한국) 산업체</h1>
+<h2 id="도담시스템스-국내-시뮬레이터-시장-1위">2-1. 도담시스템스 — 국내
+시뮬레이터 시장 1위</h2>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>설립</td>
+<td><strong>2000년 6월</strong> (KAI에서 분사)</td>
+</tr>
+<tr>
+<td>본사</td>
+<td>사천 (KAI 본사 인근)</td>
+</tr>
+<tr>
+<td>인원</td>
+<td>약 80명 (2022 기준)</td>
+</tr>
+<tr>
+<td>시장 점유</td>
+<td><strong>국내 항공 시뮬레이터의 95%</strong></td>
+</tr>
+<tr>
+<td>특기</td>
+<td><strong>Level D급</strong> 풀-플라이트 시뮬레이터, 항공전자
+장비</td>
+</tr>
+</tbody>
+</table>
+<h3 id="핵심-실적">핵심 실적</h3>
+<ul>
+<li><strong>T-50 Level D 시뮬레이터를 국내 최초로 개발</strong> → 공군
+설치·운영</li>
+<li><strong>KF-21 시뮬레이터</strong> 개발 — 실제 KF-21 조종 환경과
+<strong>99% 이상 동일</strong>, 좌우 210도·상하 170도 화면,
+주야간·우천·강설 모든 기상 조건 재현</li>
+<li>무인경계 시스템 + 로봇 시스템 기술까지 확장</li>
+</ul>
+<h3 id="우리-프로젝트와의-관계">우리 프로젝트와의 관계</h3>
+<p>도담시스템스가 만드는 <strong>Level D 시뮬레이터는 한 대
+~$10-15M</strong> 가격대. 우리 프로젝트가 직접 경쟁할 수는 없지만,
+<strong>그들이 사용하는 LabVIEW/MATLAB/시뮬링크 모델을 웹에서 즉시
+시각화하는 어댑터</strong> (HITL 채널) 로는 보완재 가치가 있다.</p>
+<p><strong>출처</strong>: - <a
+href="http://www.epnc.co.kr/news/articleView.html?idxno=45083">테크월드뉴스
+- 시뮬레이터 전문 기업 도담시스템스</a> - <a
+href="https://www.defensetoday.kr/news/articleView.html?idxno=3198">디펜스투데이
+- KF-21 시뮬레이터 공개</a> - <a
+href="https://v.daum.net/v/20250417082733505">다음뉴스 - 르포: 실제와
+99% 동일 KF-21 시뮬레이터 타보니 (2025.04)</a></p>
+<h2 id="kai-한국항공우주산업-항공기-oem-자체-시뮬-생태계">2-2. KAI
+(한국항공우주산업) — 항공기 OEM + 자체 시뮬 생태계</h2>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>설립</td>
+<td>1999년</td>
+</tr>
+<tr>
+<td>본사</td>
+<td>사천</td>
+</tr>
+<tr>
+<td>핵심 제품</td>
+<td>T-50 골든이글, FA-50, <strong>KF-21 보라매</strong>, KUH-1
+수리온</td>
+</tr>
+<tr>
+<td>2026 마일스톤</td>
+<td>KF-21 첫 양산기 인도 (2026.03.25, 대통령 참석)</td>
+</tr>
+<tr>
+<td>시뮬 전략</td>
+<td>자체 풀-플라이트 + 에픽게임즈 협업 VR</td>
+</tr>
+</tbody>
+</table>
+<h3 id="kai-에픽게임즈-코리아-mou-2023.03">KAI × 에픽게임즈 코리아 MOU
+(2023.03)</h3>
+<p>이 MOU는 한국 시뮬 산업의 분기점이다.</p>
+<ul>
+<li><strong>언리얼 엔진 5 기반 VR 비행 훈련 시뮬레이터</strong> 공동
+개발</li>
+<li>기존 풀-플라이트(Level D) 시뮬레이션 <strong>이전 단계</strong>의
+hands-on 훈련 환경 → 대규모 합동 훈련 가능</li>
+<li>KAI는 항공기 + 훈련 시스템 개발 기술에 <strong>XR/VR/메타버스 + 4차
+산업혁명 기술</strong>을 결합한 미래 훈련 모델 구축</li>
+<li>KF-21 외 다른 항공기 정비훈련 시뮬, 가상비행시험 플랫폼으로
+확장</li>
+</ul>
+<h3 id="의미">의미</h3>
+<ul>
+<li>산업 시뮬은 <strong>자체 엔진</strong> 또는 <strong>CAE의
+Medallion</strong> 같은 폐쇄 솔루션이 표준이었음</li>
+<li>한국이 <strong>언리얼 엔진을 산업 시뮬에 도입한 선도 사례</strong> —
+개발 속도·인력 풀·콘텐츠 재사용성 측면에서 큰 이점</li>
+<li>2024년 CAE Prodigy도 게임 엔진 기반으로 Level D 인증 →
+<strong>트렌드와 맞물림</strong></li>
+</ul>
+<h3 id="kf-21-양산-시뮬-일정">KF-21 양산 / 시뮬 일정</h3>
+<ul>
+<li>2026.01.13 개발시험 종료 (1,600회 비행 무사고)</li>
+<li>2026.03.25 첫 양산기 인도</li>
+<li>시뮬레이터: 도담 (Level D) + KAI (VR) 양 트랙 운영</li>
+<li>KAI는 <strong>2번째 KF-21 계약 ₩2.4조원</strong> 추가 수주
+(2025)</li>
+</ul>
+<p><strong>출처</strong>: - <a
+href="https://www.koreaittimes.com/news/articleView.html?idxno=119885">Korea
+IT Times - KAI Epic Games MOU</a> - <a
+href="https://www.unrealengine.com/developer-interviews/introducing-kai-s-next-gen-simulation-ecosystem-powered-by-unreal-engine">Unreal
+Engine 공식 - KAI Next-Gen Simulation Ecosystem</a> - <a
+href="https://www.koreaherald.com/article/10519467">Korea Herald - KAI
+W2.4tr KF-21 deal</a> - <a
+href="https://www.motormag.co.kr/news/articleView.html?idxno=4802">모터매거진
+- 언리얼 엔진 KF-21 비행 시뮬레이터 적용</a></p>
+<h2 id="한화시스템-항공전자-aesa-레이더">2-3. 한화시스템 — 항공전자 +
+AESA 레이더</h2>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>설립</td>
+<td>2014 (한화탈레스 → 2018 한화시스템)</td>
+</tr>
+<tr>
+<td>본사</td>
+<td>성남 (판교 R&amp;D)</td>
+</tr>
+<tr>
+<td>핵심 사업</td>
+<td>방산 IT, <strong>AESA 레이더</strong>, IRST, EOTS, 항공전자</td>
+</tr>
+<tr>
+<td>KF-21 역할</td>
+<td>AESA 레이더 + IRST + EOTS, 잔여 사업 ₩1248억</td>
+</tr>
+</tbody>
+</table>
+<p>한화시스템은 <strong>시뮬레이터를 직접 만들지 않지만</strong>,
+시뮬레이터가 모사해야 하는 <strong>센서 시스템 전체</strong>를 공급한다.
+다시 말해, 한화시스템 레이더의 동작 모델을 정확히 시뮬할 수 있는 회사가
+도담/KAI다. 한국 방산 시뮬 산업의 <strong>공급 사슬 핵심</strong>.</p>
+<p><strong>출처</strong>: - <a
+href="https://www.hanwhasystems.com/kr/business/defense/space/avonics01.do">한화시스템
+- 차세대 한국형 전투기</a> - <a
+href="https://www.ajunews.com/view/20250626171850775">아주경제 -
+KAI/한화에어로/한화시스템 KF-21 추가 계약 ₩3.2조원</a></p>
+<h2 id="한화에어로스페이스-엔진">2-4. 한화에어로스페이스 — 엔진</h2>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>KF-21 엔진 공급</td>
+<td>F414-GE-400, <strong>80기 ₩6,232억</strong> (2028.12까지)</td>
+</tr>
+<tr>
+<td>누적 엔진 생산</td>
+<td><strong>10,000기+ (46년)</strong> — F-4(1979) → KF-21</td>
+</tr>
+<tr>
+<td>독자 개발 엔진</td>
+<td><strong>11종</strong></td>
+</tr>
+<tr>
+<td>2025 마일스톤</td>
+<td><strong>6세대 전투기 엔진 독자 개발 착수</strong></td>
+</tr>
+</tbody>
+</table>
+<p>엔진은 시뮬레이션 정확도의 핵심 입력. 한화에어로의 엔진 모델
+데이터(추력/연비/응답)가 도담의 시뮬레이터에 들어간다. 우리 프로젝트에서
+<code>physics.js</code>의 <code>maxThrust = 4500N</code> 같은 단일
+상수로 처리한 부분이 산업급에서는 <strong>수천 개 파라미터의 룩업
+테이블</strong>로 모델링된다.</p>
+<p><strong>출처</strong>: - <a
+href="https://www.hanwha.co.kr/newsroom/media_center/news/news_view.do?seq=14239">한화그룹
+- KF-21 최초 양산 엔진 전량 공급</a> - <a
+href="https://www.etnews.com/20250626000441">전자신문 - 한화에어로 KF-21
+엔진 공급</a> - <a
+href="https://m.g-enews.com/view.php?ud=202505010926505063fbbec65dfb_1">글로벌이코노믹
+- 한화에어로 6세대 전투기 엔진</a></p>
+<h2 id="lig-nex1-무인기-군집-미사일">2-5. LIG Nex1 — 무인기 + 군집 +
+미사일</h2>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>설립</td>
+<td>2014 (LG넥스원 분리)</td>
+</tr>
+<tr>
+<td>본사</td>
+<td>성남 (판교)</td>
+</tr>
+<tr>
+<td>강점</td>
+<td>미사일·레이더·통신·EW (전자전), 무인기</td>
+</tr>
+<tr>
+<td>시뮬 영역</td>
+<td><strong>무인기 훈련 시뮬, AI 군집 무인기</strong></td>
+</tr>
+</tbody>
+</table>
+<p>ADD와 함께 <strong>AI 군집 무인기</strong>를 2025년 최초 공개
+(비즈한국 단독). 한국 무인기 시뮬 시장은 LIG가 사실상 단독.</p>
+<p><strong>출처</strong>: - <a
+href="https://www.bizhankook.com/bk/article/31593">비즈한국 -
+ADD/LIG넥스원 AI 군집 무인기 최초 공개</a> - <a
+href="https://www.lignex1.com/business/avncDrnList.do">LIG Nex1
+항공전자·드론</a></p>
+<h2 id="현대자동차-슈퍼널-supernal-uam-evtol">2-6. 현대자동차 슈퍼널
+(Supernal) — UAM eVTOL</h2>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>설립</td>
+<td>2020 (Hyundai Aerospace → 2021 Supernal로 리브랜드)</td>
+</tr>
+<tr>
+<td>본사</td>
+<td>워싱턴 D.C. (미국 법인) + 용산 AAM 연구소 (2026 완공)</td>
+</tr>
+<tr>
+<td>항공기</td>
+<td><strong>S-A2</strong> (5인승 eVTOL, 시속 200 km, 항속 100 km)</td>
+</tr>
+<tr>
+<td>인증</td>
+<td><strong>2025 FAA eVTOL 인증 획득</strong> (신청 후 9개월)</td>
+</tr>
+<tr>
+<td>시뮬 협업</td>
+<td><strong>Microsoft와 AI 비행 시뮬 플랫폼</strong> (2025.01)</td>
+</tr>
+<tr>
+<td>상용화 목표</td>
+<td><strong>2028년</strong> (당초 2025 → 2028로 지연)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="현황-2026-기준">현황 (2026 기준)</h3>
+<ul>
+<li>FAA 인증 진척 → <strong>글로벌 1위급 진도</strong> (Joby, Archer
+다음)</li>
+<li>다만 산업 전반 인증 강화 + 수요 불확실성으로 조직 축소 진행</li>
+<li><strong>용산 AAM 연구소 (지하 5층 + 지상 7층, 1만+ 명
+상주)</strong>: 2026 완공 예정</li>
+</ul>
+<h3 id="우리-프로젝트와의-관계-1">우리 프로젝트와의 관계</h3>
+<p>슈퍼널은 자체 시뮬을 Microsoft와 함께 만든다. 우리가 직접 경쟁할 수는
+없지만, <strong>UAM 회사들이 자기 비행 데이터를 클라이언트에게 보여주는
+데모 도구</strong>로는 우리 같은 웹 기반 시각화의 가치가 명확.</p>
+<p><strong>출처</strong>: - <a
+href="https://www.theguru.co.kr/news/article.html?no=76575">The Guru -
+현대차 슈퍼널 FAA eVTOL 인증 획득</a> - <a
+href="https://www.ebn.co.kr/news/articleView.html?idxno=1692193">EBN -
+슈퍼널 조직 재정비</a> - <a
+href="https://www.etnews.com/20211109000273">전자신문 - 슈퍼널 새이름
+공개</a> - <a
+href="https://namu.wiki/w/%EC%8A%88%ED%8D%BC%EB%84%90">나무위키 -
+슈퍼널</a></p>
+<h2 id="plana-하이브리드-evtol-스타트업">2-7. Plana — 하이브리드 eVTOL
+스타트업</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>설립</td>
+<td>2021 (한국)</td>
+</tr>
+<tr>
+<td>항공기</td>
+<td><strong>Plana CP-01</strong> — 6인승 + 1조종사, 시속 350+ km, 항속
+480+ km</td>
+</tr>
+<tr>
+<td>차별화</td>
+<td><strong>하이브리드</strong> (터보제너레이터 + 배터리) — 순수 전기
+eVTOL의 항속 한계 극복</td>
+</tr>
+<tr>
+<td>2025 펀딩</td>
+<td>VONAER로부터 <strong>20대 (5대 인증, 15대 상업) 사전주문, 총 $664M
+가치</strong></td>
+</tr>
+<tr>
+<td>위치</td>
+<td><strong>2025년 미국 이전</strong> 진행 중 (FAA 인증 가속)</td>
+</tr>
+<tr>
+<td>한국 사업</td>
+<td><strong>K-UAM Grand Challenge</strong> 데모 항공기 참여</td>
+</tr>
+</tbody>
+</table>
+<h3 id="특이점">특이점</h3>
+<p>순수 전기 eVTOL (Joby/Archer/Volocopter) 대부분이 <strong>항속
+100-150km</strong> 한계 → Plana는 하이브리드로 <strong>480km+</strong>
+가능 → 도시간 + 단거리 노선 (서울-도쿄 같은) 노림.</p>
+<p><strong>SkyScape (일본) + Plana</strong>: 한국-일본 첫 eVTOL 노선
+개발 발표 (2025).</p>
+<p><strong>출처</strong>: - <a
+href="https://www.autoevolution.com/news/south-korean-plana-aero-is-bringing-its-hybrid-evtol-to-the-us-211434.html">Autoevolution
+- Plana Aero hybrid eVTOL US</a> - <a
+href="https://dronelife.com/2025/09/23/plana-secures-pre-order-for-20-hybrid-evtol-aircraft-from-vonaer/">DroneLife
+- PLANA secures pre-order from VONAER (2025.09)</a> - <a
+href="https://www.urbanairmobilitynews.com/aam-uam-route-and-programme-news/skyscape-and-plana-plan-to-develop-asias-first-evtol-route-between-korea-and-japan/">Urban
+Air Mobility News - SkyScape + Plana Korea-Japan eVTOL route</a> - <a
+href="https://evtol.news/plana-unnamed">eVTOL.news - Plana CP-01</a></p>
+<h2 id="두산모빌리티이노베이션-dmi-수소-드론">2-8.
+두산모빌리티이노베이션 (DMI) — 수소 드론</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>설립</td>
+<td>2016 (두산 그룹)</td>
+</tr>
+<tr>
+<td>첫 양산</td>
+<td><strong>2019 — 세계 최초 수소 연료전지 드론 양산</strong></td>
+</tr>
+<tr>
+<td>성능</td>
+<td>비행 시간 <strong>2시간</strong>, 운전 반경 <strong>40 km</strong>
+(배터리 드론 대비 4-5배)</td>
+</tr>
+<tr>
+<td>가격</td>
+<td>약 5,000만원 (대량 보급 한계)</td>
+</tr>
+<tr>
+<td>2025 전략</td>
+<td>물류 드론, 카고 드론 사업화</td>
+</tr>
+<tr>
+<td>PX4 사용</td>
+<td><strong>PX4 기반</strong> 비행 제어</td>
+</tr>
+</tbody>
+</table>
+<p>DMI는 <strong>MAVLink/PX4 표준을 사용하는 한국 회사</strong> → 우리
+브릿지 (<code>bridge/server.mjs</code>) 기술과 직접 호환.</p>
+<p><strong>출처</strong>: - <a
+href="https://www.doosanmobility.com/kr">두산모빌리티이노베이션 공식</a>
+- <a href="https://zdnet.co.kr/view/?no=20250307154828">ZDNet Korea -
+드론부터 건물 발전까지 수소 주도권</a> - <a
+href="https://www.irobotnews.com/news/articleView.html?idxno=23589">로봇신문
+- DMI 수소 연료전지 드론 상용화</a></p>
+<h2 id="니어스랩-nearthlab-군집-자폭-요격-드론">2-9. 니어스랩
+(NearthLab) — 군집 자폭 / 요격 드론</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>설립</td>
+<td><strong>2015년</strong> (최재혁 대표)</td>
+</tr>
+<tr>
+<td>출발점</td>
+<td>풍력발전 점검 드론 → 방산 확장</td>
+</tr>
+<tr>
+<td>2025 위상</td>
+<td><strong>세계 100대 드론 방산기업</strong> (미국 디펜스포스트
+선정)</td>
+</tr>
+<tr>
+<td>핵심 제품</td>
+<td><strong>자이든</strong> (군집 자폭드론, 1명이 100대 운영, AI
+통신두절 자율)</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>카이든</strong> (직충돌 요격드론, 시속 250 km+)</td>
+</tr>
+<tr>
+<td>매출 성장</td>
+<td>₩80억 (2024) → <strong>₩204억 (2025), 2.5배</strong></td>
+</tr>
+<tr>
+<td>2026 계획</td>
+<td>코스닥 IPO 추진</td>
+</tr>
+</tbody>
+</table>
+<h3 id="의미-1">의미</h3>
+<p>니어스랩은 <strong>PX4/ArduPilot 같은 오픈소스 + 자체 AI</strong>
+조합. 한국 드론 방산의 대표 사례. 군집 자율 비행 알고리즘 검증에
+<strong>시뮬레이션이 핵심</strong> — 1대 시제기 비행시험 비용 vs 100대
+가상 시뮬의 차이가 명확.</p>
+<p><strong>출처</strong>: - <a
+href="https://www.unicornfactory.co.kr/article/2025071614490772672">유니콘팩토리
+- 니어스랩 IPO 자금 조달</a> - <a
+href="https://m.edaily.co.kr/amp/read?newsId=04982326642074784&amp;mediaCodeNo=257">E데일리
+- 소버린 드론 AI 기반 자율비행</a> - <a
+href="https://nearthlab.com/kr/">니어스랩 공식</a></p>
+<h2 id="파블로항공-군집-조율-sw">2-10. 파블로항공 — 군집 조율 SW</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>강점</td>
+<td>군집 드론 SW (드론쇼 유명, AI 군집 조율)</td>
+</tr>
+<tr>
+<td>2025 펀딩</td>
+<td><strong>₩110억</strong> (대한항공, LIG넥스원-IBK 방산혁신펀드,
+비하이인베스트먼트)</td>
+</tr>
+<tr>
+<td>기술 마일스톤</td>
+<td>군집 조율 기술 단계 중 <strong>4단계 국내 최초 도달</strong></td>
+</tr>
+<tr>
+<td>2025 진출</td>
+<td>DSK 전시회에서 <strong>국방 드론 최초 공개</strong> → 국방 산업
+진출</td>
+</tr>
+</tbody>
+</table>
+<p><strong>출처</strong>: - <a
+href="https://www.aitimes.com/news/articleView.html?idxno=168226">AI타임스
+- 파블로항공 DSK 국방 드론</a> - <a
+href="https://www.pabloair.com/">파블로항공 공식</a></p>
+<h2 id="정부-rd-kari-add">2-11. 정부 R&amp;D — KARI · ADD</h2>
+<h3 id="kari-한국항공우주연구원">KARI (한국항공우주연구원)</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>사업</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>드론교통관리시스템 (UTM) 1단계</strong></td>
+<td>2017-2022 (저고도 150m 이하, 150kg 이하)</td>
+</tr>
+<tr>
+<td><strong>UTM 2단계</strong></td>
+<td><strong>2023-2026 진행</strong></td>
+</tr>
+<tr>
+<td><strong>드론캅 (Drone-Cop)</strong></td>
+<td>2021-2025, 안티 드론 시스템 (불법 드론 무력화)</td>
+</tr>
+<tr>
+<td>공공안전 무인기</td>
+<td>산림 화재, 재난 감시 등</td>
+</tr>
+</tbody>
+</table>
+<h3 id="add-국방과학연구소">ADD (국방과학연구소)</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>사업</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>무인기 자율항법 임무관리 기술</td>
+<td>2017-2020, 무인기가 외부 위협에 자율 대응</td>
+</tr>
+<tr>
+<td><strong>AI 군집 무인기</strong></td>
+<td>LIG Nex1과 합작, 2025 공개</td>
+</tr>
+</tbody>
+</table>
+<p><strong>출처</strong>: - <a
+href="https://www.kari.re.kr/kor/contents/20">KARI -
+드론교통관리시스템</a> - <a
+href="https://www.korea.kr/news/pressReleaseView.do?newsId=156451254">정책브리핑
+- ADD 무인기 자율화 기술</a></p>
+<h2 id="학계-kaist-서울대">2-12. 학계 — KAIST · 서울대</h2>
+<h3 id="kaist-무인시스템-및-제어-연구실">KAIST 무인시스템 및 제어
+연구실</h3>
+<ul>
+<li>2025년 <strong>PIBOT</strong> (Humanoid Robot Pilot for
+Human-Centric Aircraft Cockpits) 공개</li>
+<li>휴머노이드가 <strong>기존 인간용 콕핏을 그대로 조작</strong> →
+항공기 개조 없이 자율비행 가능</li>
+<li>시뮬-투-실기 transfer learning 연구의 한국 대표</li>
+</ul>
+<h3 id="서울대-항공우주공학과">서울대 항공우주공학과</h3>
+<ul>
+<li>기초학문 + 설계 지향 + 융합 연구</li>
+<li>KARI/ADD/KAI에 인력 공급의 핵심</li>
+</ul>
+<p><strong>출처</strong>: - <a
+href="https://unmanned.kaist.ac.kr/">KAIST 무인시스템 및 제어 연구실</a>
+- <a href="https://aerospace.snu.ac.kr/">서울대 항공우주공학과</a></p>
+<hr />
+<h1 id="글로벌-산업체-한국과의-비교">3. 글로벌 산업체 (한국과의
+비교)</h1>
+<h2 id="게임-엔터테인먼트">3-1. 게임 / 엔터테인먼트</h2>
+<h3 id="asobo-studio-microsoft-flight-simulator-2024">Asobo Studio
+(Microsoft Flight Simulator 2024)</h3>
+<ul>
+<li>본사: 프랑스 보르도, ~400명</li>
+<li>자체 엔진 (Unity/Unreal 아님)</li>
+<li>2024 발표: <strong>20개 이상 핵심 시스템 비동기 멀티스레드
+재구조</strong> + EFB + 향상된 물리</li>
+<li>Bing Maps + Azure AI → 전 세계 1:1 스케일 지형</li>
+<li>200명 이상 코어 + 30+ 외부 파트너</li>
+</ul>
+<h3 id="eagle-dynamics-dcs-world">Eagle Dynamics (DCS World)</h3>
+<ul>
+<li>본사: 스위스, 개발팀 러시아·우크라이나</li>
+<li>자체 엔진, 군용기 정밀 시뮬 (“study sim”)</li>
+<li>F-16, F-18, A-10 등 실 매뉴얼 수준 재현</li>
+<li>라이선스 모델: 무료 + DLC 항공기 ($60-80)</li>
+</ul>
+<h3 id="laminar-research-x-plane-12">Laminar Research (X-Plane 12)</h3>
+<ul>
+<li>본사: 미국 콜로라도, ~30명 (소규모)</li>
+<li>1992년 Austin Meyer 단독 시작</li>
+<li><strong>Blade Element Theory</strong> 정통 공력</li>
+<li><strong>FAA Level D 인증된 유일한 게임 출신 엔진</strong></li>
+</ul>
+<p><strong>출처</strong>: - <a
+href="https://en.wikipedia.org/wiki/Microsoft_Flight_Simulator_2024">Wikipedia
+- Microsoft Flight Simulator 2024</a> - <a
+href="https://en.wikipedia.org/wiki/Asobo_Studio">Wikipedia - Asobo
+Studio</a> - <a
+href="https://wccftech.com/microsoft-flight-simulator-2024-announced/">WCCFTech
+- MFS 2024 evolved engine</a></p>
+<h2 id="훈련-방산-1티어">3-2. 훈련 / 방산 1티어</h2>
+<h3 id="cae-글로벌-단독-1위">CAE — 글로벌 단독 1위</h3>
+<ul>
+<li>본사: 캐나다 몬트리올, 1947 설립</li>
+<li>시가총액 ~$8B</li>
+<li>2025 백로그 <strong>$11.8B</strong> (record)</li>
+<li>분기 매출 <strong>$1.09B</strong> (10% YoY 증가)</li>
+<li><strong>2021년 L3Harris 군 훈련 사업부 $1.05B에 인수</strong> →
+사실상 군용 훈련 통합</li>
+<li>자체 엔진: <strong>Medallion-6000</strong> (visual),
+<strong>Tropos</strong> (지형), <strong>CAE Prodigy</strong> (게임 엔진
+기반)</li>
+<li>2024 마일스톤: <strong>CAE Prodigy로 게임 엔진 기반 풀-플라이트
+시뮬레이터 첫 Level D 인증</strong> ★</li>
+</ul>
+<p>CAE Prodigy의 Level D 인증은 우리 프로젝트가 (이론상) 갈 수 있는 길을
+보여준다. 게임 엔진 = 인증 못 받음 이라는 통념이 깨진 해.</p>
+<h3
+id="l3harris-military-training-부문-cae-흡수-본체는-항공우주방위">L3Harris
+(military training 부문 → CAE 흡수, 본체는 항공우주/방위)</h3>
+<ul>
+<li>합병체 (L3 + Harris, 2019)</li>
+<li>군 훈련 시뮬 부문은 CAE에 매각, 핵심은 통신/EW/탑재시스템</li>
+<li>미 공군 <strong>2,400대 시뮬 / 300+ 위치</strong> 업그레이드 주관
+(CAE/Dell/CymSTAR/Leidos 컨소시엄)</li>
+</ul>
+<h3 id="flightsafety-international">FlightSafety International</h3>
+<ul>
+<li>1951 설립, <strong>Berkshire Hathaway</strong> (워런 버핏)
+자회사</li>
+<li>Gulfstream, Cessna 등 비즈니스 제트 훈련 강세</li>
+<li>CAE의 미국 대안</li>
+</ul>
+<h3 id="boeing-airbus">Boeing / Airbus</h3>
+<ul>
+<li>자체 시뮬 부서 보유 (특히 항공기 인증용)</li>
+<li>단, 조종사 훈련 시뮬은 CAE/FlightSafety 같은 외주 의존도 큼</li>
+</ul>
+<p><strong>출처</strong>: - <a
+href="https://www.shephardmedia.com/news/training-simulation/cae-completes-deal-l3harris-technologies/">Shephard
+Media - CAE completes L3Harris S&amp;T deal</a> - <a
+href="https://www.prnewswire.com/news-releases/cae-to-acquire-l3harris-technologies-military-training-business-for-us1-05-billion-301237025.html">PR
+Newswire - CAE acquires L3Harris Military Training $1.05B</a> - <a
+href="https://www.cae.com/media-centre/press-releases/first-full-flight-simulator-with-gaming-engine-powered-cae-prodigy-image-generator-achieves-level-d-qualification">CAE
+공식 - Prodigy game engine Level D</a> - <a
+href="https://www.mordorintelligence.com/industry-reports/global-civil-aviation-flight-training-and-simulation-market-industry">Mordor
+- Civil Aviation Flight Training Market</a></p>
+<h2 id="uam-evtol">3-3. UAM / eVTOL</h2>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>회사</th>
+<th>본사</th>
+<th>항공기</th>
+<th>2025 진척</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Joby Aviation</strong></td>
+<td>미국</td>
+<td>5인승 eVTOL</td>
+<td>FAA 인증 막바지, Toyota 투자</td>
+</tr>
+<tr>
+<td><strong>Archer Aviation</strong></td>
+<td>미국</td>
+<td>Midnight</td>
+<td>United Airlines 주문</td>
+</tr>
+<tr>
+<td><strong>Beta Technologies</strong></td>
+<td>미국</td>
+<td>ALIA</td>
+<td>군 + 화물 우선</td>
+</tr>
+<tr>
+<td><strong>Lilium</strong> (독일)</td>
+<td>독일</td>
+<td>Jet</td>
+<td><strong>2024 파산 후 재구조</strong></td>
+</tr>
+<tr>
+<td><strong>Volocopter</strong> (독일)</td>
+<td>독일</td>
+<td>VoloCity</td>
+<td><strong>2024 파산 후 재구조</strong></td>
+</tr>
+<tr>
+<td><strong>Eve Air Mobility</strong> (브라질)</td>
+<td>브라질</td>
+<td>—</td>
+<td>Embraer 자회사</td>
+</tr>
+<tr>
+<td><strong>현대 슈퍼널</strong></td>
+<td>한국/미국</td>
+<td>S-A2</td>
+<td><strong>2025 FAA 인증 획득</strong></td>
+</tr>
+<tr>
+<td><strong>Plana</strong></td>
+<td>한국→미국</td>
+<td>CP-01 (하이브리드)</td>
+<td><strong>2025 VONAER 20대</strong></td>
+</tr>
+</tbody>
+</table>
+<p>UAM은 2024년 유럽 거품이 꺼지면서 (Lilium, Volocopter 파산)
+<strong>미국·한국·브라질 중심 재편</strong>. 한국 두 회사가 Top 5에
+포함된 건 의미 있다.</p>
+<p><strong>출처</strong>: - <a href="https://evtol.news/">eVTOL.news</a>
+- <a href="https://www.theguru.co.kr/news/article.html?no=76575">The
+Guru - 슈퍼널 FAA eVTOL 인증</a> - <a
+href="https://dronelife.com/2025/09/23/plana-secures-pre-order-for-20-hybrid-evtol-aircraft-from-vonaer/">DroneLife
+- PLANA + VONAER</a></p>
+<h2 id="자율-드론-방산-신생">3-4. 자율 드론 / 방산 신생</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>회사</th>
+<th>특기</th>
+<th>2025</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Skydio</strong> (미국)</td>
+<td>자율비행 드론 1위, 군용 진출</td>
+<td>미군 지속 수주</td>
+</tr>
+<tr>
+<td><strong>Anduril</strong> (미국)</td>
+<td>AI 통합 방산</td>
+<td>폭발적 성장, 시총 $14B</td>
+</tr>
+<tr>
+<td><strong>Shield AI</strong></td>
+<td>정찰 AI</td>
+<td>V-BAT 시뮬 / 실기</td>
+</tr>
+<tr>
+<td><strong>Microsoft AirSim</strong></td>
+<td>Unreal 기반 자율 시뮬</td>
+<td><strong>2022 단종 → ProjectAirSim</strong></td>
+</tr>
+<tr>
+<td><strong>NVIDIA Isaac Sim</strong></td>
+<td>Omniverse 기반 로봇·드론</td>
+<td>활발</td>
+</tr>
+<tr>
+<td><strong>Cosys-Lab AirSim Fork</strong></td>
+<td>AirSim 후속 OSS</td>
+<td>학계 사용</td>
+</tr>
+</tbody>
+</table>
+<h3 id="microsoft의-airsim-projectairsim-전환-2024">Microsoft의 AirSim →
+ProjectAirSim 전환 (2024)</h3>
+<p>AirSim이 단종되고 후속이 나왔다. Microsoft가 <strong>자체 시뮬
+플랫폼</strong>을 만들어 슈퍼널 등에 제공. 우리 프로젝트가 노리는 영역과
+겹친다 — 다만 우리는 웹 기반, MS는 데스크톱.</p>
+<h2 id="오픈소스-산업-표준이-된">3-5. 오픈소스 (산업 표준이 된)</h2>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>프로젝트</th>
+<th>운영</th>
+<th>위치</th>
+<th>우리 프로젝트와</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PX4</strong></td>
+<td>PX4 Foundation (Linux Foundation)</td>
+<td>취리히/글로벌</td>
+<td>MAVLink 호환 직접</td>
+</tr>
+<tr>
+<td><strong>ArduPilot</strong></td>
+<td>DIY Drones community</td>
+<td>글로벌</td>
+<td>MAVLink 호환 직접</td>
+</tr>
+<tr>
+<td><strong>QGroundControl</strong></td>
+<td>MAVLink Foundation + Auterion</td>
+<td>스위스</td>
+<td><strong>이미 통합</strong></td>
+</tr>
+<tr>
+<td><strong>ROS / Gazebo</strong></td>
+<td>OSRF</td>
+<td>미국</td>
+<td>미통합, 차후 가능</td>
+</tr>
+<tr>
+<td><strong>JSBSim</strong></td>
+<td>NASA + 커뮤니티</td>
+<td>미국</td>
+<td><strong>M10 통합 추천</strong></td>
+</tr>
+<tr>
+<td><strong>FlightGear</strong></td>
+<td>커뮤니티</td>
+<td>글로벌</td>
+<td>우리 후순위</td>
+</tr>
+</tbody>
+</table>
+<p>PX4 + Gazebo + MAVLink + QGC가 사실상 <strong>드론 SITL의 표준
+스택</strong>. Plana, DMI, 슈퍼널, 니어스랩 모두 이 생태계 위에
+있다.</p>
+<p><strong>출처</strong>: - <a
+href="https://docs.px4.io/main/en/simulation/">PX4 Documentation -
+Simulation</a> - <a
+href="https://opus.govst.edu/research_day/2025/wed/13/">GovStateU OPUS -
+ArduPilot vs AirSim 비교 연구 (2025)</a></p>
+<hr />
+<h1 id="산업-전체의-핵심-트렌드-2024-2026">4. 산업 전체의 핵심 트렌드
+(2024-2026)</h1>
+<h2 id="게임-엔진의-산업-시뮬-진입">4-1. 게임 엔진의 산업 시뮬 진입</h2>
+<p>10년 전: “Unity/Unreal은 게임용. 산업 시뮬은 자체 엔진” 2024-2026:
+<strong>CAE Prodigy = 언리얼 + Level D 인증</strong> / <strong>KAI =
+언리얼 + KF-21 VR</strong></p>
+<p>이유: - 게임 엔진의 렌더링 품질이 자체 엔진 대비 우월 - 인력 풀:
+언리얼/유니티 개발자 &gt;&gt; 자체 엔진 개발자 - 콘텐츠 재사용 (3D 자산
+마켓플레이스) - 인증 절차 자체가 “엔진”이 아니라 “behaviour”를 검증 →
+게임 엔진도 통과 가능</p>
+<h2 id="ai-자율비행-시뮬의-폭발">4-2. AI / 자율비행 시뮬의 폭발</h2>
+<ul>
+<li>슈퍼널 + Microsoft AI 비행 시뮬</li>
+<li>ADD/LIG 군집 무인기 시뮬</li>
+<li>니어스랩 자이든의 통신 두절 자율 모드</li>
+<li>파블로항공 4단계 군집 조율</li>
+<li>KAIST PIBOT (휴머노이드 조종사)</li>
+</ul>
+<p>자율비행은 <strong>수백만 시간 시뮬 학습</strong> 없이는 못 함.
+시뮬레이션 = 자율 시스템의 인프라.</p>
+<h2 id="uam의-재편-한국의-부상">4-3. UAM의 재편 + 한국의 부상</h2>
+<ul>
+<li>유럽 (Lilium/Volocopter) 거품 꺼짐</li>
+<li>미국 (Joby/Archer/Beta) 인증 막바지</li>
+<li><strong>한국 (슈퍼널/Plana) FAA 인증 획득</strong> → 글로벌 Top tier
+진입</li>
+<li>단, 2025 → 2028 상용화 지연 공통</li>
+</ul>
+<h2 id="게임-엔진-vs-정통-공력-모델-양극화">4-4. 게임 엔진 vs 정통 공력
+모델 양극화</h2>
+<ul>
+<li><strong>CAE Prodigy / KAI VR / Asobo MFS</strong>: 게임 엔진 +
+단순화 공력 → 일반 훈련/엔터테인먼트</li>
+<li><strong>JSBSim / FlightGear / X-Plane</strong>: 정통 공력 → 인증 +
+연구</li>
+</ul>
+<p>→ 우리 <code>flight-sim2</code>는 현재 게임 엔진 진영. M10 (JSBSim
+통합) 가면 양 진영 다리 역할 가능.</p>
+<h2 id="cae의-단독-천하-도담의-국내-천하">4-5. CAE의 단독 천하 + 도담의
+국내 천하</h2>
+<ul>
+<li>글로벌 군 훈련: CAE (35% 시장 + L3Harris 흡수)</li>
+<li>국내 항공 시뮬: <strong>도담시스템스 (95%)</strong></li>
+<li>두 회사 모두 <strong>자체 엔진 + 풀-플라이트 + Level D</strong></li>
+</ul>
+<p>→ 신규 진입자가 1위 자리 노리는 건 비현실적. <strong>틈새 (어댑터,
+데이터 파이프라인, 시각화)</strong> 가 현실적 진입 전략.</p>
+<hr />
+<h1 id="한국-시장의-기회-우리-프로젝트-관점">5. 한국 시장의 기회 — 우리
+프로젝트 관점</h1>
+<p>이 보고서를 종합하면, 한국 비행 시뮬 산업은 다음 구조다.</p>
+<pre><code>┌──────────────────────────────────────────────┐
+│         글로벌 1위: CAE (캐나다)              │
+│         (월 ~$1.09B 매출, $11.8B 백로그)      │
+└──────────────────────────────────────────────┘
+                    │
+                    │ 일부 수입
+                    ▼
+┌──────────────────────────────────────────────┐
+│  국내 1위: 도담시스템스 (95% 점유)            │
+│  - T-50, KF-21 Level D                       │
+│  - 80명, 사천 본사                            │
+└──────────────────────────────────────────────┘
+                    │
+                    │ 협력
+                    ▼
+┌──────────────────────────────────────────────┐
+│  OEM: KAI (KF-21, T-50, FA-50, KUH-1)        │
+│  + 에픽게임즈 코리아 (UE5 VR 시뮬)             │
+│  + 한화시스템 (AESA)                          │
+│  + 한화에어로 (엔진)                          │
+└──────────────────────────────────────────────┘
+                    │
+       ┌────────────┴────────────┐
+       ▼                         ▼
+┌─────────────┐         ┌────────────────┐
+│ 방산 무인기 │         │ UAM eVTOL      │
+│ - LIG Nex1  │         │ - 슈퍼널        │
+│ - 니어스랩  │         │ - Plana         │
+│ - 파블로항공│         │                │
+│ - DMI (수소)│         │                │
+└─────────────┘         └────────────────┘
+                                │
+                                ▼
+                    ┌────────────────────┐
+                    │ R&amp;D + 학계         │
+                    │ - KARI (UTM)       │
+                    │ - ADD (자율)       │
+                    │ - KAIST (PIBOT)    │
+                    │ - 서울대           │
+                    └────────────────────┘</code></pre>
+<h2 id="우리-프로젝트의-진짜-fit">5-1. 우리 프로젝트의 진짜 fit</h2>
+<p><strong>도담/CAE 같은 풀-플라이트 시뮬은 직접 경쟁 불가능.</strong>
+하지만 다음 시장은 비어 있거나 약하다:</p>
+<h3 id="a.-시각화-어댑터-hitl-bridge">A. 시각화 어댑터 (HITL
+Bridge)</h3>
+<ul>
+<li>LIG/ADD/KARI/대학이 <strong>MATLAB/Simulink/LabVIEW로 만든 비행
+알고리즘</strong>을 빠르게 시연하고 싶을 때</li>
+<li>자체 시뮬 부서 없는 회사 (니어스랩, 파블로항공, DMI) 가
+<strong>고객/투자자에게 화면을 보여줄 때</strong></li>
+<li>우리 HITL 채널이 정확히 이 갭</li>
+</ul>
+<h3 id="b.-멀티-vehicle-군집-시각화">B. 멀티-vehicle 군집 시각화</h3>
+<ul>
+<li>ADD/LIG/니어스랩의 <strong>AI 군집 무인기</strong> 알고리즘을 100대
+동시 시각화하는 도구가 부족</li>
+<li>우리 멀티플레이어 + AI 트래픽 조합이 베이스</li>
+<li>우리 tests/scenarios.test.mjs 같은 시나리오 검증 도구도 가치
+있음</li>
+</ul>
+<h3 id="c.-uam-데모-마케팅-도구">C. UAM 데모 / 마케팅 도구</h3>
+<ul>
+<li>슈퍼널/Plana가 투자자/규제기관 데모할 때 <strong>웹 한 줄
+URL</strong>로 보여줄 수 있는 시뮬레이터 부족</li>
+<li>우리 프로젝트의 “단일 HTML, 즉시 실행”이 정확한 솔루션</li>
+</ul>
+<h3 id="d.-학습-교육">D. 학습 / 교육</h3>
+<ul>
+<li>KAIST/서울대 학생들이 PX4/MAVLink/MAVLink 표준을 배울 때 우리 코드 =
+깔끔한 reference</li>
+</ul>
+<h2 id="비즈니스-모델-사용자가-사업적으로-검토할-때">5-2. 비즈니스 모델
+(사용자가 사업적으로 검토할 때)</h2>
+<table>
+<thead>
+<tr>
+<th>고객</th>
+<th>가치 제안</th>
+<th>가격대</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>드론 스타트업 (니어스랩급)</td>
+<td>알고리즘 시연 + 마케팅</td>
+<td>월 $500-2000</td>
+</tr>
+<tr>
+<td>UAM 회사 (Plana급)</td>
+<td>투자자 데모 + 규제 demo</td>
+<td>월 $2000-5000</td>
+</tr>
+<tr>
+<td>대학 연구실</td>
+<td>PX4/MAVLink 학습 도구</td>
+<td>무료 (open source)</td>
+</tr>
+<tr>
+<td>KARI/ADD</td>
+<td>시각화 어댑터 + 통합 컨설팅</td>
+<td>프로젝트 단위 ₩5천만-₩5억</td>
+</tr>
+<tr>
+<td>게임/엔터</td>
+<td>flight-sim 라이브러리</td>
+<td>라이선스</td>
+</tr>
+</tbody>
+</table>
+<p><strong>참고</strong>: 도담시스템스가 시뮬레이터 한 대 ~₩100-200억
+수주하는 시장에서, 우리는 그 100분의 1 ~ 1000분의 1 가격대의 보완재로
+자리 잡는 그림이 현실적.</p>
+<hr />
+<h1 id="결론-보고서-한-줄-요약">6. 결론 — 보고서 한 줄 요약</h1>
+<blockquote>
+<p><strong>국내 비행 시뮬 산업의 진짜 1위는 도담시스템스 (95%)지만,
+그들이 다루지 않는 “웹 기반 시각화 + HITL 어댑터” 시장은 비어 있다. 한국
+UAM/드론/방산 R&amp;D 진영이 빠르게 자라면서 (슈퍼널 FAA 인증, 니어스랩
+세계 100대, KAI Epic Games MOU) 그 보완재 수요는 늘고 있다. 우리
+프로젝트는 이 갭을 정확히 겨냥할 수 있다.</strong></p>
+</blockquote>
+<hr />
+<h1 id="부록-a-출처-일괄-참고용">부록 A — 출처 일괄 (참고용)</h1>
+<h2 id="한국">한국</h2>
+<ul>
+<li><a href="https://www.koreaaero.com/">KAI 한국항공우주산업주식회사
+공식</a></li>
+<li><a
+href="https://www.koreaittimes.com/news/articleView.html?idxno=119885">Korea
+IT Times - KAI Epic Games MOU</a></li>
+<li><a
+href="https://www.unrealengine.com/developer-interviews/introducing-kai-s-next-gen-simulation-ecosystem-powered-by-unreal-engine">Unreal
+Engine - KAI’s Next-Gen Simulation</a></li>
+<li><a href="https://www.koreaherald.com/article/10519467">Korea Herald
+- KAI W2.4tr KF-21 deal</a></li>
+<li><a
+href="https://www.defensetoday.kr/news/articleView.html?idxno=3198">디펜스투데이
+- KF-21 시뮬레이터 공개</a></li>
+<li><a
+href="http://www.epnc.co.kr/news/articleView.html?idxno=45083">테크월드뉴스
+- 도담시스템스 도약</a></li>
+<li><a href="https://v.daum.net/v/20250417082733505">다음뉴스 - KF-21
+시뮬레이터 르포 (2025.04)</a></li>
+<li><a
+href="https://www.hanwha.co.kr/newsroom/media_center/news/news_view.do?seq=14239">한화그룹
+- KF-21 엔진 전량 공급</a></li>
+<li><a
+href="https://www.hanwhasystems.com/kr/business/defense/space/avonics01.do">한화시스템
+- 차세대 한국형 전투기</a></li>
+<li><a href="https://www.lignex1.com/business/avncDrnList.do">LIG Nex1
+항공전자·드론</a></li>
+<li><a href="https://www.bizhankook.com/bk/article/31593">비즈한국 -
+ADD/LIG넥스원 AI 군집 무인기</a></li>
+<li><a href="https://www.theguru.co.kr/news/article.html?no=76575">The
+Guru - 슈퍼널 FAA eVTOL 인증</a></li>
+<li><a
+href="https://www.ebn.co.kr/news/articleView.html?idxno=1692193">EBN -
+슈퍼널 조직 재정비</a></li>
+<li><a
+href="https://dronelife.com/2025/09/23/plana-secures-pre-order-for-20-hybrid-evtol-aircraft-from-vonaer/">DroneLife
+- PLANA VONAER 20대</a></li>
+<li><a
+href="https://www.autoevolution.com/news/south-korean-plana-aero-is-bringing-its-hybrid-evtol-to-the-us-211434.html">Autoevolution
+- Plana hybrid eVTOL US</a></li>
+<li><a href="https://www.doosanmobility.com/kr">두산모빌리티이노베이션
+공식</a></li>
+<li><a href="https://zdnet.co.kr/view/?no=20250307154828">ZDNet - DMI
+수소 주도권</a></li>
+<li><a
+href="https://www.unicornfactory.co.kr/article/2025071614490772672">유니콘팩토리
+- 니어스랩 IPO</a></li>
+<li><a
+href="https://m.edaily.co.kr/amp/read?newsId=04982326642074784&amp;mediaCodeNo=257">E데일리
+- 니어스랩 자율비행</a></li>
+<li><a
+href="https://www.aitimes.com/news/articleView.html?idxno=168226">AI타임스
+- 파블로항공 DSK 국방 드론</a></li>
+<li><a href="https://www.kari.re.kr/kor/contents/20">KARI
+드론교통관리시스템</a></li>
+<li><a
+href="https://www.korea.kr/news/pressReleaseView.do?newsId=156451254">정책브리핑
+- ADD 무인기 자율화</a></li>
+<li><a href="https://unmanned.kaist.ac.kr/">KAIST 무인시스템 및 제어
+연구실</a></li>
+</ul>
+<h2 id="글로벌">글로벌</h2>
+<ul>
+<li><a
+href="https://en.wikipedia.org/wiki/Microsoft_Flight_Simulator_2024">Wikipedia
+- Microsoft Flight Simulator 2024</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Asobo_Studio">Wikipedia -
+Asobo Studio</a></li>
+<li><a href="https://en.wikipedia.org/wiki/CAE_Inc.">Wikipedia - CAE
+Inc.</a></li>
+<li><a
+href="https://www.cae.com/media-centre/press-releases/first-full-flight-simulator-with-gaming-engine-powered-cae-prodigy-image-generator-achieves-level-d-qualification">CAE
+공식 - Prodigy game engine Level D</a></li>
+<li><a
+href="https://www.shephardmedia.com/news/training-simulation/cae-completes-deal-l3harris-technologies/">Shephard
+Media - CAE/L3Harris</a></li>
+<li><a
+href="https://www.prnewswire.com/news-releases/cae-to-acquire-l3harris-technologies-military-training-business-for-us1-05-billion-301237025.html">PR
+Newswire - CAE acquires L3Harris $1.05B</a></li>
+<li><a
+href="https://www.mordorintelligence.com/industry-reports/global-civil-aviation-flight-training-and-simulation-market-industry">Mordor
+- Civil Aviation Flight Training Market</a></li>
+<li><a
+href="https://www.fortunebusinessinsights.com/flight-simulator-market-102592">Fortune
+Business Insights - Flight Simulator Market</a></li>
+<li><a href="https://docs.px4.io/main/en/simulation/">PX4 Documentation
+- Simulation</a></li>
+<li><a href="https://opus.govst.edu/research_day/2025/wed/13/">GovStateU
+OPUS - ArduPilot vs AirSim (2025)</a></li>
+</ul>
+<hr />
+<p><em>본 보고서는 2026.04.28 기준 공개 자료를 종합. 시장 수치는
+출처별로 차이가 있어 범위로 표기. 회사 내부 사정/매출 디테일은 공시·보도
+기반. 비공개 R&amp;D 프로젝트는 포함하지 않음.</em></p>
+</body>
+</html>
