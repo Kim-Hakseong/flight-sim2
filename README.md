@@ -1,5 +1,12 @@
 # Browser Flight Sim — MVP
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-▶%20Play-ffb000?style=for-the-badge)](https://kim-hakseong.github.io/flight-sim2/)
+
+[![Three.js](https://img.shields.io/badge/Three.js-r128-000000?logo=three.js&logoColor=white)](https://threejs.org/)
+[![No Build](https://img.shields.io/badge/build-none%20·%20static-success)](https://kim-hakseong.github.io/flight-sim2/)
+[![GitHub last commit](https://img.shields.io/github/last-commit/Kim-Hakseong/flight-sim2)](https://github.com/Kim-Hakseong/flight-sim2/commits/main)
+[![GitHub Pages](https://img.shields.io/github/deployments/Kim-Hakseong/flight-sim2/github-pages?label=pages)](https://kim-hakseong.github.io/flight-sim2/)
+
 > 🎮 **라이브 데모**: **https://kim-hakseong.github.io/flight-sim2/** — 설치 없이 브라우저에서 바로 조작 가능.
 
 > 📚 **분야 입문 가이드**: [docs/FLIGHT-SIM-PRIMER.md](docs/FLIGHT-SIM-PRIMER.md) (또는 [PDF](docs/FLIGHT-SIM-PRIMER.pdf))
