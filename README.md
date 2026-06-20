@@ -1,5 +1,7 @@
 # Browser Flight Sim — MVP
 
+> 🎮 **라이브 데모**: **https://kim-hakseong.github.io/flight-sim2/** — 설치 없이 브라우저에서 바로 조작 가능.
+
 > 📚 **분야 입문 가이드**: [docs/FLIGHT-SIM-PRIMER.md](docs/FLIGHT-SIM-PRIMER.md) (또는 [PDF](docs/FLIGHT-SIM-PRIMER.pdf))
 > — 비행 시뮬 분야가 처음이면 이거 먼저 읽으면 우리 코드의 모든 부분이 어떤 학문/산업적 맥락에서 왔는지 보임.
 
