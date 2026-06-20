@@ -64,6 +64,15 @@ await sleep(2500); // init + a few telemetry frames
 const fails = [];
 const baseline = lastPayload;
 console.log('baseline tx:', baseline && { x: baseline.x, z: baseline.z, alt: baseline.altitude });
+
+// An HTTPS page (e.g. the github.io deploy) cannot POST to an http://localhost
+// capture server — the browser blocks mixed content. That's expected: the real
+// QGC/HILS demo runs entirely local over http (`npm run bridge`). Skip, don't fail.
+if (!baseline && pageUrl.startsWith('https:')) {
+  console.log('telem-check: SKIP — HTTPS page can\'t POST to http capture (mixed content). Run against a local http page for the real check.');
+  ws.close(); server.close();
+  process.exit(0);
+}
 if (!baseline) fails.push('no telemetry captured (measured→telemetry not sending?)');
 
 // Inject a GPS bias/spoof and confirm the transmitted position jumps.
