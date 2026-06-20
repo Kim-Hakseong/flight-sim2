@@ -13,6 +13,7 @@ import {
   sideslipAngle,
   aeroMoments,
   bodyAngularAccel,
+  sideForce,
   INERTIA,
   AERO_DERIV,
 } from '../src/physics.js';
@@ -137,6 +138,32 @@ test('bodyAngularAccel: pure — does not mutate inputs', () => {
   bodyAngularAccel(omega, moment, INERTIA);
   assert.deepEqual(omega, { p: 0.1, q: 0.2, r: 0.3 });
   assert.deepEqual(moment, { L: 1, M: 2, N: 3 });
+});
+
+// ---------- sideForce: lateral aerodynamic force (M8-follow) ----------
+
+test('sideForce: +beta gives a force opposing the slip (negative) when CY_beta<0', () => {
+  // +β = velocity drifting toward +right wing → side force should push −right.
+  const Y = sideForce({ qbar: 100, S: 16, beta: 0.1, deriv: { CY_beta: -0.3 } });
+  assert.ok(Y < 0, `expected restoring (−) side force, got ${Y}`);
+});
+
+test('sideForce: zero sideslip → zero force', () => {
+  assert.ok(closeTo(sideForce({ qbar: 100, S: 16, beta: 0, deriv: { CY_beta: -0.3 } }), 0));
+});
+
+test('sideForce: no dynamic pressure → zero force', () => {
+  assert.ok(closeTo(sideForce({ qbar: 0, S: 16, beta: 0.2, deriv: { CY_beta: -0.3 } }), 0));
+});
+
+test('sideForce: scales linearly with dynamic pressure', () => {
+  const y1 = sideForce({ qbar: 100, S: 16, beta: 0.1, deriv: { CY_beta: -0.3 } });
+  const y2 = sideForce({ qbar: 200, S: 16, beta: 0.1, deriv: { CY_beta: -0.3 } });
+  assert.ok(closeTo(y2, 2 * y1, 1e-9), `${y2} vs 2*${y1}`);
+});
+
+test('AERO_DERIV: side-force derivative is stabilizing (CY_beta < 0)', () => {
+  assert.ok(AERO_DERIV.CY_beta < 0);
 });
 
 // ---------- default airframe sanity ----------

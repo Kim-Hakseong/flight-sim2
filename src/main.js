@@ -43,6 +43,7 @@ import {
   sideslipAngle,
   aeroMoments,
   bodyAngularAccel,
+  sideForce,
   INERTIA,
   GRAVITY,
   STALL_AOA_RAD,
@@ -712,9 +713,15 @@ function stepPhysics(dt) {
   // Gravity (world).
   const gravityVec = new THREE.Vector3(0, -AIRCRAFT.mass * GRAVITY, 0);
 
+  // Lateral side force from sideslip (completes 6-DOF translation): acts along
+  // the body right axis, opposing the slip so turns become coordinated.
+  const betaF = (v > 0.5) ? sideslipAngle(sim.velocity, tmpForward, tmpRight) : 0;
+  const SY = sideForce({ qbar: 0.5 * rho * v * v, S: AIRCRAFT.wingArea, beta: betaF });
+  const sideVec = tmpRight.clone().multiplyScalar(SY);
+
   // --- 5. Sum forces, integrate velocity & position ---
   tmpAccel.set(0, 0, 0)
-    .add(liftVec).add(dragVec).add(thrustVec).add(gravityVec)
+    .add(liftVec).add(dragVec).add(thrustVec).add(gravityVec).add(sideVec)
     .multiplyScalar(1 / AIRCRAFT.mass);
 
   sim.velocity.addScaledVector(tmpAccel, dt);

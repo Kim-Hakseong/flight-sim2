@@ -102,6 +102,8 @@ export const AERO_DERIV = {
   Cl_beta: -0.08, Cl_p: -0.45, Cl_da: 0.12,
   // yaw (Cn, yaw-right +)
   Cn_beta: 0.12, Cn_r: -0.18, Cn_dr: 0.10,
+  // side force (CY along +X right wing). CY_beta<0 ⇒ sideslip is opposed.
+  CY_beta: -0.30,
 };
 
 /**
@@ -141,6 +143,16 @@ export function aeroMoments({
     M: qbar * S * chord * Cm,
     N: qbar * S * span * Cn,
   };
+}
+
+/**
+ * Lateral aerodynamic (side) force along the body +X (right wing) axis, from
+ * sideslip: Y = qbar · S · CY_β · β. With CY_β < 0 the force opposes the slip,
+ * which (together with weathercock yaw) gives coordinated-turn behavior.
+ * Returns a scalar in newtons (sign along +X right).
+ */
+export function sideForce({ qbar, S, beta, deriv = AERO_DERIV }) {
+  return qbar * S * (deriv.CY_beta || 0) * beta;
 }
 
 /**

@@ -438,3 +438,18 @@
 - 풀 엘리베이터를 저속에서 계속 당기면 과회전→실속(물리적으로 정상). 부드러운 입력이 필요 — 기존 레이트제어보다 "진짜 비행기"처럼 거동.
 - Mac Mini 실기 확인: 뱅크 후 약하게 수평 복귀(롤 SAS), 피치는 트림 받음각으로 수렴(레벨 유지 아님=정상). 오토파일럿 미션(M 키) 안정성도 눈으로 확인 권장.
 - 헤드리스 재현: `node tests/fly-check.mjs <url> <port>` (Chrome --headless=new --enable-unsafe-swiftshader).
+
+## 2026-06-20 17:48 — M8-follow: 사이드포스 (병진 6-DOF 완성)
+
+**Status**: GREEN
+**Files changed**: src/physics.js, src/main.js, tests/sixdof.test.mjs, PRD.md
+**Tests**: 5 added (sideForce), 111 passing, 0 failing · 콘솔 에러 0 · 행동검증 PASS(peakAlt 120m)
+**Decisions**:
+- 횡력 Y = qbar·S·CY_β·β 를 body right(+X) 축에 추가. CY_β=-0.30 (<0 → 슬립 억제, 조화선회).
+- 순수 함수 sideForce 신규(TDD), stepPhysics 힘 합산에 sideVec 추가. β는 병진 후 tmpRight로 재계산(aoa와 동일 패턴).
+- 이로써 3 병진 + 3 회전 = 6-DOF 완성. 마하/스풀/지상반력은 별도 마일스톤(M8 Out 유지).
+**Next**:
+- #4 센서/액추에이터 모델(HILS 결함주입) 또는 마하/압축성·추진 스풀
+**Notes**:
+- 횡력은 직진비행(β≈0)엔 영향 거의 없음 — 슬립/요 입력(Q/E) 시 측면 가속·조화선회로 체감.
+- 기존 fly-check/console-check 그대로 PASS — 횡력 추가가 이륙·상승 거동 깨지 않음 확인.
