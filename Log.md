@@ -572,3 +572,19 @@
 **Notes**:
 - ~30회 프로브 반복으로 규명: 즉시 발산은 요댐핑 부족(Cn_r). 잔존 wallow는 협조선회 게인 미세조정(러더 과활성↔과소) 문제로 오프라인 해석이 효율적.
 - 회귀: console/fly/mission(152m)/hils/nav/telem 전부 PASS. 수동비행·HILS·FDE 무회귀.
+
+## 2026-06-20 23:36 — M16: 횡-방향 안정성 해석 도구 + 발산 원인 재정의
+
+**Status**: GREEN
+**Files changed**: src/lateral.js (new), tests/lateral.test.mjs (new), PRD.md
+**Tests**: 8 added (lateral), 172 passing, 0 failing
+**Decisions**:
+- lateral.js: charPoly(Faddeev-LeVerrier) + routhHurwitzStable + numericalJacobian + lateralStability(실제 aero/관성으로 [β,p,r,φ] level-trim 선형화).
+- **핵심 발견**: 라우스-후르비츠 결과 M8·M15 모든 구성에서 에어프레임 lateral 모드 안정(stable=true). 발산은 불안정 에어프레임이 아님.
+- 프로브 재분석: departure가 항상 aoa>60° 실속과 동시 → 진짜 원인은 선회 중 속도저하→실속→post-stall departure. 블라인드 횡방향 튜닝이 잘못된 방향이었음을 해석으로 입증.
+- TDD: "에어프레임은 횡방향 안정" 테스트로 잠금(향후 미계수 변경이 불안정 만들면 RED).
+**Next**:
+- M17: 협조 요레이트 피드포워드(r_coord=g·tan(bank)/V) + 선회 속도가드(실속 방지) → 깔끔한 협조선회, circuit 복원
+**Notes**:
+- 분석 출력: CURRENT(M15) poly=[1,20.5,112,137,22.5] stable, OLD M8(Cn_r=-0.18)도 stable. 즉 선형 횡방향은 항상 안정 → 문제는 비선형 실속.
+- 이 도구는 영구 자산: 향후 미계수 변경 시 횡방향 모드 안정성 즉시 검증 가능.
