@@ -55,3 +55,28 @@ test('autopilot: tick returns null when no mission is active', () => {
   ap.abort();
   assert.equal(ap.tick(navState(50)), null);
 });
+
+// ---------- coordinated turn direction (M17) ----------
+
+// Waypoint off to one side, plane in NAV heading north at cruise.
+function navTowardWaypoint(wp) {
+  ap.setMission([wp], HOME); ap.startMission();
+  return ap.tick(navState(50));
+}
+
+test('turn direction: a left vs right waypoint commands opposite roll (turns the right way)', () => {
+  const east = { lat: HOME.lat + 0.01, lon: HOME.lon + 0.01, alt: 100, frame: 3 }; // ahead + right
+  const west = { lat: HOME.lat + 0.01, lon: HOME.lon - 0.01, alt: 100, frame: 3 }; // ahead + left
+  const rollEast = navTowardWaypoint(east).roll;
+  const rollWest = navTowardWaypoint(west).roll;
+  assert.ok(rollEast !== 0 && rollWest !== 0, 'should command a turn');
+  assert.ok(Math.sign(rollEast) === -Math.sign(rollWest),
+    `left/right targets must bank opposite ways (east=${rollEast}, west=${rollWest})`);
+});
+
+test('turn coordinator: commands rudder in a bank (β-free coordinated turn)', () => {
+  ap.setMission([{ lat: HOME.lat + 0.01, lon: HOME.lon + 0.01, alt: 100, frame: 3 }], HOME);
+  ap.startMission();
+  const out = ap.tick({ ...navState(50), bankRad: 0.3 }); // established right bank
+  assert.ok(Math.abs(out.yaw) > 1e-3, `bank should produce coordinating rudder, got ${out.yaw}`);
+});

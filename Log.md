@@ -588,3 +588,20 @@
 **Notes**:
 - 분석 출력: CURRENT(M15) poly=[1,20.5,112,137,22.5] stable, OLD M8(Cn_r=-0.18)도 stable. 즉 선형 횡방향은 항상 안정 → 문제는 비선형 실속.
 - 이 도구는 영구 자산: 향후 미계수 변경 시 횡방향 모드 안정성 즉시 검증 가능.
+
+## 2026-06-20 23:59 — M17: 협조선회 완성 — 풀 서킷 AUTO 비행
+
+**Status**: GREEN 🎉
+**Files changed**: src/autopilot.js, src/missions.js, tests/autopilot.test.mjs, tests/mission-check.mjs, PRD.md
+**Tests**: 2 added (선회 방향/협조), 174 passing, 0 failing · 콘솔 0 · mission-check 풀 circuit 완주(DONE 4/4) · 전 브라우저 회귀 PASS
+**Decisions**:
+- 협조 요레이트 FF: yawCmd가 r_coord=g·tan(bank)/V 추종 → 사이드슬립 0 → 다이히드럴 spiral 롤업 차단 → 뱅크 유지·하중↓·속도 유지 → 실속 없음. 더치롤은 에어프레임 Cn_r 감쇠.
+- 선회 속도가드(turnMargin): 저속 시 뱅크 축소로 실속 마진.
+- MAX_BANK 25°(협조라 지속가능, 선회반경 충분히 작아 항법 가능), HEADING_TO_BANK 1.1.
+- **방향 부호 수정**: heading→bank 매핑이 이 좌표계에서 반대(위치추적으로 규명). desiredBank=-headingErr*K. 좌우 선회 정상.
+- 데모 미션 climbing circuit 복원(4 WP) → 완주.
+**Next**:
+- sensor-in-the-loop AUTO 재도전(견고해진 제어로 estimated 재평가), 하강/착륙 단계
+**Notes**:
+- M14~M17 ~35회 프로브 반복의 결정적 체인: M16 해석(에어프레임 안정→실속이 원인) → M17 협조 요레이트 FF(실속 제거) → 부호 수정(방향). 위치 추적(gpsX/gpsZ)으로 방향 버그 확정.
+- mission-check: 이륙→152m 순항→WP1→협조선회→WP2(x≈900)→WP3→WP4→DONE, 전구간 OK·속도 46~56·aoa 낮음.

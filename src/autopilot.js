@@ -31,10 +31,12 @@ const TAKEOFF_PITCH   = 8 * Math.PI / 180;
 const GROUND_OFFSET   = 0.8;       // matches aircraft.userData.gearOffset
 
 // Outer-loop limits.
-const MAX_BANK  = 14 * Math.PI / 180;   // 14° — gentle turns bleed little speed
+const MAX_BANK  = 25 * Math.PI / 180;   // 25° — coordinated, so sustainable; tight
+                                        // enough to navigate the waypoint spacing
 const MAX_PITCH = 8 * Math.PI / 180;    // 8° — a sustainable climb at full power
 // Outer-loop gains.
-const HEADING_TO_BANK = 0.6;            // gentle heading→bank (avoid bank overshoot)
+const HEADING_TO_BANK = 1.1;            // responsive heading→bank (turn coordinator
+                                        // keeps it coordinated, so this can be brisk)
 
 // Longitudinal control (classic separation): pitch holds altitude, throttle holds
 // airspeed. A hard speed guard forces the nose down below SAFE_SPEED so a climb or
@@ -72,18 +74,19 @@ const ROLL_LIMIT = 0.35;
 const PITCH_LIMIT_UP = 0.22;
 const PITCH_LIMIT_DOWN = -0.22;
 
-// Yaw damper (with washout) + sideslip coordinator. The washout high-passes the
-// yaw rate so the damper fights dutch-roll OSCILLATIONS but not the steady yaw of
-// a coordinated turn; the β term then zeros residual sideslip. Without the
-// washout a strong damper opposes the turn rate itself and induces a slip.
-const YAW_DAMP   = 1.4;  // damps dutch-roll oscillation (on the washed-out rate)
-const WASHOUT_HZ = 0.5;  // rad/s — slow washout (≈2 s); steady turn rate passes through
-const ARI        = 0.15; // aileron→rudder feedforward (anticipate adverse yaw)
-const BETA_KP    = 1.5;  // rudder toward zero sideslip → coordinated turn
-const YAW_LIMIT  = 0.7;
-let lpYawRate = 0;       // washout low-pass state (the steady component to subtract)
-const yawCommand = (rollCmd, washedYaw, beta) =>
-  clamp(ARI * rollCmd + BETA_KP * (beta || 0) - YAW_DAMP * washedYaw, -YAW_LIMIT, YAW_LIMIT);
+// Turn coordinator (M17): command the rudder to track the COORDINATED yaw rate of
+// the current bank, r_coord = g·tan(φ)/V. Driving the actual turn rate zeros the
+// sideslip — so the dihedral can't roll the bank up into a spiral, the bank holds
+// at the (small) command, load stays low, airspeed is kept, and the turn never
+// stalls. The airframe's own Cn_r damps the dutch-roll oscillation.
+const G          = 9.81;
+const YAW_RATE_KP = 2.0; // rudder per (rad/s) coordinated-yaw-rate error
+const ARI         = 0.2; // aileron→rudder feedforward (anticipate adverse yaw on roll-in)
+const YAW_LIMIT   = 0.7;
+const yawCommand = (rollCmd, bankRad, yawRate, speed) => {
+  const rCoord = G * Math.tan(clamp(bankRad, -1.2, 1.2)) / Math.max(speed, 20);
+  return clamp(YAW_RATE_KP * (rCoord - (yawRate || 0)) + ARI * rollCmd, -YAW_LIMIT, YAW_LIMIT);
+};
 
 const TARGET_SPEED = 50;     // m/s cruise
 const REF_SPEED    = 44;     // m/s — gain-scheduling reference (gains tuned here)
@@ -99,7 +102,6 @@ export function startMission() {
   started = true;
   currentSeq = 0;
   phase = 'TAKEOFF';
-  lpYawRate = 0;
 }
 export function abort() { started = false; phase = 'IDLE'; }
 export function isActive() { return !!(mission && started); }
@@ -125,12 +127,6 @@ export function tick(simState, dt = 0.02) {
   const altAGL = simState.y - GROUND_OFFSET;
   const speed = Math.hypot(simState.vx, simState.vy, simState.vz);
 
-  // Yaw-rate washout: track the steady (low-frequency) yaw rate and subtract it,
-  // leaving only the oscillatory part for the yaw damper to act on.
-  const yawRate = simState.yawRate || 0;
-  lpYawRate += (yawRate - lpYawRate) * Math.min(1, WASHOUT_HZ * dt);
-  const washedYaw = yawRate - lpYawRate;
-
   // Gain scheduling: control-surface authority grows with dynamic pressure (∝v²).
   // Scale the inner-loop commands by (REF/v)² so the effective loop gain — and
   // thus the pitch/roll response — stays roughly constant from rotation to cruise,
@@ -153,7 +149,7 @@ export function tick(simState, dt = 0.02) {
     }
     return {
       pitch: pitchCmd * qScale, roll: rollCmd * qScale,
-      yaw: yawCommand(rollCmd * qScale, washedYaw, simState.beta), throttle: 1.0,
+      yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed), throttle: 1.0,
     };
   }
 
@@ -178,7 +174,14 @@ export function tick(simState, dt = 0.02) {
   // ----- Outer loop: heading + altitude pitch with hard speed protection --
   const desiredHeading = Math.atan2(dx, -dz);
   const headingErr = wrapPi(desiredHeading - simState.headingRad);
-  const desiredBank = clamp(headingErr * HEADING_TO_BANK, -MAX_BANK, MAX_BANK);
+  // Turn speed guard: scale bank down as airspeed drops toward SAFE_SPEED, so a
+  // turn is never commanded that would bleed speed into a stall (roll wings level
+  // to recover when slow). Restores full bank authority at cruise.
+  const turnMargin = clamp((speed - SAFE_SPEED) / (TARGET_SPEED - SAFE_SPEED), 0, 1);
+  // NOTE: empirically the bank/heading sign in this sim requires a negative
+  // mapping here — a +heading-error (target to the right) needs a left-signed
+  // bank command to actually turn toward it. (Verified by position tracking.)
+  const desiredBank = clamp(-headingErr * HEADING_TO_BANK, -MAX_BANK, MAX_BANK) * turnMargin;
 
   // Pitch holds altitude; throttle (below) holds speed. The hard speed guard
   // forces the nose down below SAFE_SPEED so a turn/climb can never stall.
@@ -207,7 +210,7 @@ export function tick(simState, dt = 0.02) {
 
   return {
     pitch: pitchCmd * qScale, roll: rollCmd * qScale,
-    yaw: yawCommand(rollCmd * qScale, washedYaw, simState.beta), throttle: throttleCmd,
+    yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed), throttle: throttleCmd,
   };
 }
 

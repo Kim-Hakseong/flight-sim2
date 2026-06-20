@@ -52,30 +52,32 @@ const fails = [];
 if (!start.active) fails.push('mission did not become active');
 if (start.len < 3) fails.push(`expected ≥3 waypoints, got ${start.len}`);
 
-let maxAlt = 0, maxSeq = 0, reachedNav = false, crashed = false, last = start;
-for (let i = 0; i < 30; i++) {       // ~45 s — long enough to take off, climb, hit WPs
+let maxAlt = 0, maxSeq = 0, reachedNav = false, crashed = false, done = false, last = start;
+for (let i = 0; i < 130; i++) {      // up to ~195 s — the full coordinated circuit
   const s = await evalJs(stateExpr);
   last = s;
   maxAlt = Math.max(maxAlt, s.alt || 0);
   maxSeq = Math.max(maxSeq, s.seq || 0);
   if (s.phase === 'NAV' || s.phase === 'DONE') reachedNav = true;
-  if (s.status === 'CRASH') { crashed = true; }
-  if (i % 3 === 0) console.log(`t≈${(2 + i * 1.5).toFixed(0)}s phase=${s.phase} seq=${s.seq}/${s.len} alt=${s.alt} spd=${s.spd} st=${s.status}`);
-  if (s.phase === 'DONE') break;     // whole mission flown
+  if (s.status === 'CRASH') { crashed = true; break; }
+  if (i % 4 === 0) console.log(`t≈${(2 + i * 1.5).toFixed(0)}s phase=${s.phase} seq=${s.seq}/${s.len} alt=${s.alt} spd=${s.spd} st=${s.status}`);
+  if (s.phase === 'DONE') { done = true; break; }     // whole mission flown
   await sleep(1500);
 }
-console.log('final:', last, '| maxAlt=', maxAlt, 'maxSeq=', maxSeq);
+console.log('final:', last, '| maxAlt=', maxAlt, 'maxSeq=', maxSeq, 'done=', done);
 ws.close();
 
 if (crashed) fails.push('aircraft crashed during the mission');
 if (!reachedNav) fails.push(`autopilot never left TAKEOFF (phase=${last.phase})`);
 if (maxAlt < 80) fails.push(`did not climb on AUTO (maxAlt=${maxAlt})`);
-if (maxSeq < 1) fails.push(`never reached a waypoint (maxSeq=${maxSeq})`);
+// Coordinated turns must navigate the circuit: reach the back half (≥3 of 4 WPs)
+// or finish. maxSeq≤1 means it couldn't turn through the waypoints.
+if (!done && maxSeq < 3) fails.push(`did not navigate the circuit (maxSeq=${maxSeq}, done=${done})`);
 
 if (fails.length) {
   console.log(`mission-check: FAIL (${fails.length})`);
   for (const f of fails) console.log('  - ' + f);
   process.exit(1);
 }
-console.log(`mission-check: PASS — AUTO took off, climbed (${Math.round(maxAlt)}m), and reached waypoint ${maxSeq} on '${last.src}' nav`);
+console.log(`mission-check: PASS — AUTO flew coordinated turns through ${done ? 'the full circuit (DONE)' : `waypoint ${maxSeq}`}, climbed ${Math.round(maxAlt)}m, on '${last.src}' nav`);
 process.exit(0);

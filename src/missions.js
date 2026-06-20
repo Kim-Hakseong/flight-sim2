@@ -28,10 +28,10 @@ export function localToWaypoint(home, xEast, zLocal, altAGL) {
 // it climbs to cruise and holds altitude/airspeed precisely. Coordinated turns
 // still wallow (lateral-directional dynamics need offline pole-placement) → M16.
 const LEGS = [
-  { x: 0, z: -400,  alt: 130 }, // 1: climb-out ahead
-  { x: 0, z: -1400, alt: 150 }, // 2: continue climb to cruise
-  { x: 0, z: -2400, alt: 150 }, // 3: level cruise
-  { x: 0, z: -3400, alt: 150 }, // 4: hold heading
+  { x: 0,    z: -1400, alt: 150 }, // 1: straight climb — stabilize at cruise
+  { x: 900,  z: -2300, alt: 150 }, // 2: level right turn (crosswind)
+  { x: 900,  z: -900,  alt: 150 }, // 3: level downwind
+  { x: 0,    z: -1600, alt: 150 }, // 4: level base turn back
 ];
 
 /** Build the demo circuit mission for a given home. Pure. */
