@@ -24,27 +24,38 @@ const ARRIVAL_VERT_M  = 80;        // looser vertical so it advances even if we
                                    // can't reach the exact altitude
 // Phase transition thresholds.
 const TAKEOFF_ALT_M   = 50;        // higher climb-out before turning
-const ROTATE_SPEED    = 25;
+const ROTATE_SPEED    = 42;        // rotate only well above stall — the moment-
+                                   // based 6-DOF (M8) needs real flying speed or
+                                   // it mushes back onto the runway after liftoff
 const TAKEOFF_PITCH   = 8 * Math.PI / 180;
 const GROUND_OFFSET   = 0.8;       // matches aircraft.userData.gearOffset
 
 // Outer-loop limits.
-const MAX_BANK  = 40 * Math.PI / 180;   // 40° — tighter turns
-const MAX_PITCH = 18 * Math.PI / 180;   // 18° pitch envelope
+const MAX_BANK  = 25 * Math.PI / 180;   // 25° — a coordinated turn without turn
+                                        // compensation loses lift at high bank
+const MAX_PITCH = 8 * Math.PI / 180;    // 8° — a sustainable climb at full power;
+                                        // steeper bleeds speed into a stall
 // Outer-loop gains.
-const HEADING_TO_BANK = 1.4;            // more aggressive heading→bank
-const ALT_TO_PITCH    = 0.018;          // crisper altitude tracking
-// Inner-loop gains.
-const BANK_KP = 2.0;
-const ROLL_RATE_KD = 0.45;
-const PITCH_KP = 2.6;
-const PITCH_RATE_KD = 0.30;
+const HEADING_TO_BANK = 0.9;            // gentle heading→bank (avoid bank overshoot)
+const ALT_TO_PITCH    = 0.015;          // gentle altitude tracking
+// Inner-loop gains. Gentle P with strong rate damping: the moment-based 6-DOF
+// (M8) responds fast, so an aggressive P overshoots into a PIO — and sensor
+// noise (sensor-in-the-loop) excites it. More D, less P keeps it critically-ish
+// damped on both truth and noisy estimated nav.
+const BANK_KP = 1.2;
+const ROLL_RATE_KD = 0.7;
+const PITCH_KP = 1.0;
+const PITCH_RATE_KD = 1.0;
 
-const ROLL_LIMIT = 0.8;
-const PITCH_LIMIT_UP = 0.6;
-const PITCH_LIMIT_DOWN = -0.4;
+// Limited surface authority: at cruise the elevator is very effective, so a
+// large command snaps the nose past stall before the rate term can catch it.
+const ROLL_LIMIT = 0.5;
+const PITCH_LIMIT_UP = 0.22;
+const PITCH_LIMIT_DOWN = -0.22;
 
 const TARGET_SPEED = 50;     // m/s cruise
+const STALL_GUARD  = 38;     // m/s — below this the climb command is suppressed
+const REF_SPEED    = 44;     // m/s — gain-scheduling reference (gains tuned here)
 
 export function setMission(items, home) {
   mission = { items: items || [], home };
@@ -82,6 +93,12 @@ export function tick(simState) {
   const altAGL = simState.y - GROUND_OFFSET;
   const speed = Math.hypot(simState.vx, simState.vy, simState.vz);
 
+  // Gain scheduling: control-surface authority grows with dynamic pressure (∝v²).
+  // Scale the inner-loop commands by (REF/v)² so the effective loop gain — and
+  // thus the pitch/roll response — stays roughly constant from rotation to cruise,
+  // instead of overshooting into a PIO at high speed.
+  const qScale = clamp((REF_SPEED / Math.max(speed, 20)) ** 2, 0.35, 1.2);
+
   // ----- TAKEOFF phase ---------------------------------------------------
   // Banking on the runway makes the plane skid sideways without ever
   // climbing out. Hold wings level, throttle up, rotate gently once we're
@@ -99,7 +116,7 @@ export function tick(simState) {
         PITCH_LIMIT_DOWN, PITCH_LIMIT_UP,
       );
     }
-    return { pitch: pitchCmd, roll: rollCmd, yaw: 0, throttle: 1.0 };
+    return { pitch: pitchCmd * qScale, roll: rollCmd * qScale, yaw: 0, throttle: 1.0 };
   }
 
   phase = 'NAV';
@@ -124,7 +141,15 @@ export function tick(simState) {
   const desiredHeading = Math.atan2(dx, -dz);
   let headingErr = wrapPi(desiredHeading - simState.headingRad);
   const desiredBank = clamp(headingErr * HEADING_TO_BANK, -MAX_BANK, MAX_BANK);
-  const desiredPitch = clamp(dy * ALT_TO_PITCH, -MAX_PITCH, MAX_PITCH);
+  let desiredPitch = clamp(dy * ALT_TO_PITCH, -MAX_PITCH, MAX_PITCH);
+
+  // Speed/energy protection: a steep climb at low speed stalls. Bleed the
+  // commanded climb pitch toward zero as speed drops below cruise, reaching 0 at
+  // STALL_GUARD so the autopilot levels off and accelerates instead of stalling.
+  if (desiredPitch > 0 && speed < TARGET_SPEED) {
+    const f = clamp((speed - STALL_GUARD) / (TARGET_SPEED - STALL_GUARD), 0, 1);
+    desiredPitch *= f;
+  }
 
   // ----- Inner loop: roll & pitch (PD) -----------------------------------
   const bankErr  = desiredBank  - simState.bankRad;
@@ -139,13 +164,16 @@ export function tick(simState) {
     PITCH_LIMIT_DOWN, PITCH_LIMIT_UP,
   );
 
-  // ----- Throttle: hold cruise speed -------------------------------------
-  let throttleCmd;
-  if (speed < TARGET_SPEED - 5)      throttleCmd = 1.0;
-  else if (speed < TARGET_SPEED + 5) throttleCmd = 0.7;
-  else                                throttleCmd = 0.45;
+  // ----- Throttle: energy management -------------------------------------
+  // Hold speed AND add power for the commanded climb. The old "cut throttle when
+  // fast" logic starved a climb of energy and stalled it; here a climb keeps the
+  // power in so airspeed doesn't decay.
+  const throttleCmd = clamp(
+    0.6 + (TARGET_SPEED - speed) * 0.05 + Math.max(0, desiredPitch) * 1.4,
+    0.3, 1.0,
+  );
 
-  return { pitch: pitchCmd, roll: rollCmd, yaw: 0, throttle: throttleCmd };
+  return { pitch: pitchCmd * qScale, roll: rollCmd * qScale, yaw: 0, throttle: throttleCmd };
 }
 
 function holdLevel() {

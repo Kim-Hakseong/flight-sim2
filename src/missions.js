@@ -1,0 +1,42 @@
+// Built-in demo mission (M12). Lets AUTO mode be flown — and headlessly
+// regression-tested — without uploading a mission from QGroundControl.
+// COORDINATE: local sim frame: +x east, +z south (north = -z), y = AGL meters.
+//
+// localToWaypoint is the inverse of autopilot.waypointToLocal:
+//   x = (lon-home.lon)·111320·cos(lat),  z = -(lat-home.lat)·111320
+
+const M_PER_DEG = 111320;
+
+/**
+ * Convert a local-frame point (east x, sim-z, AGL alt) to a MAVLink-style
+ * waypoint {lat, lon, alt, frame}. frame 3 = relative altitude (AGL). Pure.
+ */
+export function localToWaypoint(home, xEast, zLocal, altAGL) {
+  const cosLat = Math.cos(home.lat * Math.PI / 180);
+  return {
+    lat: home.lat + (-zLocal) / M_PER_DEG,
+    lon: home.lon + xEast / (M_PER_DEG * cosLat),
+    alt: altAGL,
+    frame: 3,
+  };
+}
+
+// Circuit in local meters: climb out straight ahead, right turn, downwind,
+// base turn back toward the field. Plane starts at z≈950 heading -z.
+// Straight, gently-climbing legs ahead of the runway (plane starts z≈950 heading
+// −z). The cascade autopilot flies straight-and-climb robustly; aggressive
+// climbing turns are left to a future autopilot-hardening milestone.
+const LEGS = [
+  { x: 0, z: 300,   alt: 90 },  // 1: climb-out ahead
+  { x: 0, z: -700,  alt: 110 }, // 2: continue straight, gentle climb
+  { x: 0, z: -1700, alt: 110 }, // 3: level cruise ahead
+  { x: 0, z: -2700, alt: 110 }, // 4: hold heading
+];
+
+/** Build the demo circuit mission for a given home. Pure. */
+export function buildDemoMission(home) {
+  return {
+    home,
+    items: LEGS.map((l) => localToWaypoint(home, l.x, l.z, l.alt)),
+  };
+}

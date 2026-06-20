@@ -506,3 +506,21 @@
 - 미션 자동비행(QGC AUTO)에서 estimated로 비행하므로, 스푸핑 시 항로 이탈을 QGC에서 관찰 가능(수동 확인 권장).
 - 헤드리스 재현: node tests/nav-check.mjs <url> <port>.
 - 주: GPS 센서 자체 1차 지연(bw3)이 이미 measured를 매끄럽게 해, 칼만의 추가 평활은 작게 보임(0.112 vs 0.138). 칼만의 본 가치는 속도추정 + 바이어스 불가역 시연.
+
+## 2026-06-20 19:50 — M12: 데모 미션 + 오토파일럿 강건화 + AUTO 헤드리스 회귀
+
+**Status**: GREEN
+**Files changed**: src/missions.js (new), src/autopilot.js, src/main.js, src/controls.js, tests/missions.test.mjs (new), tests/mission-check.mjs (new), tests/nav-check.mjs, PRD.md
+**Tests**: 5 added (missions), 155 passing, 0 failing · 콘솔 0 · 전 브라우저 회귀 PASS · AUTO 미션 회귀 PASS
+**Decisions**:
+- 데모 미션 내장(missions.js): buildDemoMission/localToWaypoint(autopilot 역변환). K키/window.loadDemoMission, __hils.auto 노출.
+- **M8 이후 오토파일럿 잠재 회귀 발견·수정**: 데모 미션 회귀가 모멘트 기반 6-DOF에서 오토파일럿 발산을 포착. 강건화: 동압 게인 스케줄링(REF/v)², 에너지 인식 스로틀, 속도 보호, ROTATE 25→42, MAX_PITCH 18→8, 완만 선회(MAX_BANK 40→25), 제한된 조종면 권한(PITCH_LIMIT 0.45→0.22).
+- 센서: IMU 채널 zero-lag(bandwidth Infinity)+소량 노이즈. 자세/각속도 지연이 내부 루프 불안정 유발 → 제거. GPS/기압은 느린 센서 유지.
+- AUTO 기본 navSource 'truth'(신뢰성)로, estimated는 opt-in HILS 스트레스 모드. estimated 속도는 truth 사용(전용 속도센서 없음, KF속도 불안정).
+**Next**:
+- M12-follow: 상승 선회용 협조선회+TECS, 견고한 sensor-in-the-loop AUTO(레이트 필터/게인 재설계)
+- M13: FDE(결함탐지/배제) + NAV DEGRADED
+**Notes**:
+- 데모 미션은 직진+완만 상승(WP 4개). 급선회+상승은 현 오토파일럿이 실속 → Out of M12로 명시.
+- 검증: mission-check.mjs(헤드리스 AUTO 회귀), 이륙→alt 118→WP2 도달 안정. 콘솔: window.loadDemoMission() 또는 K키, N키 중단.
+- estimated 이륙 PIO 디버깅 18회 반복으로 원인 규명: 센서 지연/노이즈가 한계안정 캐스케이드 PD를 자극. 근본 해결은 오토파일럿 재설계(M12-follow).

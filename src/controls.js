@@ -26,6 +26,7 @@ export function createControlState() {
     onScenarioCycle: () => {},
     onScenarioStart: () => {},
     onMultiplayerToggle: () => {},
+    onDemoMission: () => {},
   };
 }
 
@@ -51,6 +52,7 @@ export function attachKeyboard(state) {
     if (k === 't') state.onScenarioCycle();
     if (k === 'g') state.onScenarioStart();
     if (k === 'j') state.onMultiplayerToggle();
+    if (k === 'k') state.onDemoMission();
 
     updateAxes(state, keys);
     // Throttle is integrated over time, but we also want a tiny instant nudge.

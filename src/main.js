@@ -51,7 +51,8 @@ import {
 import { DT_PHYS, MAX_SUBSTEPS, planSteps, rk4Step } from './fixedStep.js';
 import { stepActuator } from './actuators.js';
 import { makeRng, stepSensor } from './sensors.js';
-import { createKF, kfStep, lowpassStep } from './estimator.js';
+import { createKF, kfStep } from './estimator.js';
+import { buildDemoMission } from './missions.js';
 
 const THREE = window.THREE;
 
@@ -133,15 +134,18 @@ const ACTUATOR_CFG = { bandwidth: 25, rateLimit: 10, min: -1, max: 1 };
 // bandwidth = lag). Tuned to plausible light-aircraft avionics; sensors are an
 // observation tap (not in the control loop), so noise never destabilizes flight.
 const SENSOR_CFG = {
-  airspeed: { noise: 0.4, bandwidth: 8 },   // m/s
-  altitude: { noise: 0.6, bandwidth: 6 },   // m  (baro)
-  pitch:    { noise: 0.1, bandwidth: 20 },  // deg
-  roll:     { noise: 0.1, bandwidth: 20 },  // deg
-  heading:  { noise: 0.2, bandwidth: 15 },  // deg
-  p:        { noise: 0.3, bandwidth: 30 },  // deg/s (IMU gyro)
-  q:        { noise: 0.3, bandwidth: 30 },
-  r:        { noise: 0.3, bandwidth: 30 },
-  gpsX:     { noise: 1.5, bandwidth: 3 },   // m
+  airspeed: { noise: 0.4, bandwidth: 8 },    // m/s  (pitot, some lag)
+  altitude: { noise: 0.6, bandwidth: 6 },    // m    (baro, laggy)
+  // IMU channels: zero lag (bandwidth Infinity by default). Real gyros/accels run
+  // far faster than the control loop; any lag here erodes phase margin and
+  // destabilizes the fast inner loop. Small noise only.
+  pitch:    { noise: 0.05 },  // deg
+  roll:     { noise: 0.05 },  // deg
+  heading:  { noise: 0.1 },   // deg
+  p:        { noise: 0.15 },  // deg/s (IMU gyro)
+  q:        { noise: 0.15 },
+  r:        { noise: 0.15 },
+  gpsX:     { noise: 1.5, bandwidth: 3 },     // m    (GPS, slow)
   gpsZ:     { noise: 1.5, bandwidth: 3 },
 };
 // Fault registry — null = healthy. Inject from the console:
@@ -153,15 +157,16 @@ const sensorRng = makeRng(0xC0FFEE);       // seeded → deterministic noise
 let measured = {};                         // latest measured (sensor) values
 
 // Sensor-in-the-loop (M11): the autopilot flies on the navigation SOURCE below.
-//   'truth'     — perfect state (legacy)
+//   'truth'     — perfect state (default; reliable AUTO)
 //   'measured'  — raw sensor values fed straight to the controller
-//   'estimated' — sensors fused by a Kalman/low-pass estimator (default)
-// The estimator rejects random noise but not bias — so a GPS spoof still fools
-// the autopilot, which is exactly the HILS lesson.
-let navSource = 'estimated';
+//   'estimated' — sensors fused by a Kalman estimator
+// Default is 'truth' for dependable AUTO flight. setNavSource('estimated') opts
+// into sensor-in-the-loop: the estimator rejects random GPS noise but not bias,
+// so a spoof still fools the nav (the HILS lesson) — and the realistic sensor
+// dynamics stress the controller (robust sensor-in-the-loop AUTO is future work).
+let navSource = 'truth';
 const DEG2RAD = Math.PI / 180;
 let kfX = createKF(), kfZ = createKF(), kfY = createKF();
-const navLP = { pitch: 0, roll: 0, p: 0, q: 0 };
 let navEstimate = null;                    // { estimated, measured } autopilot inputs
 
 if (typeof window !== 'undefined') {
@@ -174,6 +179,12 @@ if (typeof window !== 'undefined') {
     get faults() { return hilsFaults; },
     get navSource() { return navSource; },
     get nav() { return navEstimate; },
+    get auto() {
+      return {
+        active: autopilot.isActive(), phase: autopilot.getPhase(),
+        seq: autopilot.getCurrentSeq(), len: autopilot.getMissionLength(),
+      };
+    },
   };
 }
 
@@ -238,6 +249,14 @@ controls.onMissionStart = () => {
     console.log('[sim] no mission loaded — upload a plan from QGC first');
   }
 };
+controls.onDemoMission = () => {
+  // Load + start the built-in circuit so AUTO mode is flyable without QGC (K key).
+  const m = buildDemoMission(HOME);
+  autopilot.setMission(m.items, m.home);
+  autopilot.startMission();
+  console.log(`[sim] demo mission started (K key) — ${m.items.length} waypoints, flying on '${navSource}' nav`);
+};
+if (typeof window !== 'undefined') window.loadDemoMission = () => controls.onDemoMission();
 controls.onMissionAbort = () => {
   if (autopilot.isActive()) {
     autopilot.abort();
@@ -355,7 +374,6 @@ function resetAircraft() {
   sim.omega.set(0, 0, 0);
   sim.actuators.elevator = sim.actuators.aileron = sim.actuators.rudder = 0;
   kfX = createKF(sim.position.x); kfZ = createKF(sim.position.z); kfY = createKF(0);
-  navLP.pitch = navLP.roll = navLP.p = navLP.q = 0;
   navEstimate = null; measured = {};
   sim.status = 'OK';
   sim.vsi = 0;
@@ -958,21 +976,24 @@ function updateNavEstimate(dt) {
   if (m.gpsX === undefined) { navEstimate = null; return; }
   const gear = aircraft.userData.gearOffset;
 
+  // GPS position is noisy and the nav loop is slow → fuse with a Kalman filter.
+  // Attitude/rates come from the IMU with tiny noise; filtering them only adds
+  // phase lag that destabilizes the fast inner control loop, so trust them raw
+  // (an INS-trusts-attitude, GPS-filters-position split).
   kfX = kfStep(kfX, m.gpsX, dt, { q: 1.5, r: 2.5 });
   kfZ = kfStep(kfZ, m.gpsZ, dt, { q: 1.5, r: 2.5 });
   kfY = kfStep(kfY, m.altitude, dt, { q: 1.0, r: 1.0 });
-  navLP.pitch = lowpassStep(navLP.pitch, m.pitch * DEG2RAD, dt, 18);
-  navLP.roll = lowpassStep(navLP.roll, m.roll * DEG2RAD, dt, 18);
-  navLP.q = lowpassStep(navLP.q, m.q * DEG2RAD, dt, 25);
-  navLP.p = lowpassStep(navLP.p, m.p * DEG2RAD, dt, 25);
 
   navEstimate = {
     estimated: {
       x: kfX.x, y: kfY.x + gear, z: kfZ.x,
-      vx: kfX.v, vy: kfY.v, vz: kfZ.v,
+      // No dedicated velocity sensor — use the airframe velocity (an air-data /
+      // INS-derived rate would stand in here). KF position is what carries the
+      // GPS error/fault into the nav loop.
+      vx: sim.velocity.x, vy: sim.velocity.y, vz: sim.velocity.z,
       headingRad: m.heading * DEG2RAD,
-      pitchRad: navLP.pitch, bankRad: navLP.roll,
-      pitchRate: navLP.q, rollRate: navLP.p,
+      pitchRad: m.pitch * DEG2RAD, bankRad: m.roll * DEG2RAD,
+      pitchRate: m.q * DEG2RAD, rollRate: m.p * DEG2RAD,
     },
     measured: {
       x: m.gpsX, y: m.altitude + gear, z: m.gpsZ,

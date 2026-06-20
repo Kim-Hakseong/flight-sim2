@@ -41,10 +41,11 @@ const sampleExpr = `(function(){
 })()`;
 
 const fails = [];
+await evalJs(`window.setNavSource('estimated')`); // opt into sensor-in-the-loop
 const s0 = await evalJs(sampleExpr);
 console.log('nav sample:', s0);
 if (!s0) { console.error('window.__hils.nav missing'); process.exit(1); }
-if (s0.src !== 'estimated') fails.push(`default navSource should be 'estimated', got '${s0.src}'`);
+if (s0.src !== 'estimated') fails.push(`setNavSource('estimated') did not take, got '${s0.src}'`);
 
 // --- 1. nominal: estimate smoother (closer to truth) than raw GPS ---
 let estErr = 0, measErr = 0, n = 0;
