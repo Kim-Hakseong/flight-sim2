@@ -487,3 +487,22 @@
 - 검증: tests/telem-check.mjs — 캡처서버가 브릿지 역할, CDP가 window.TELEMETRY_URL을 캡처서버로 돌림(addScriptToEvaluateOnNewDocument). 결과: baseline x≈0, injectFault('gpsX',{bias:1000}) 후 전송 x≈999.8.
 - 실제 QGC 시연: `npm run bridge` 기동 → QGC 연결 → 브라우저 콘솔에서 injectFault('gpsX',{type:'bias',value:5000}) → 지도에서 기체가 점프. frozen=위치 고정, dropout=원점 튐.
 - 헤드리스 재현: node tests/telem-check.mjs <url> <port>.
+
+## 2026-06-20 19:00 — M11: 센서-in-the-loop (추정기/칼만 → 오토파일럿)
+
+**Status**: GREEN
+**Files changed**: src/estimator.js (new), src/main.js, tests/estimator.test.mjs (new), tests/nav-check.mjs (new), PRD.md
+**Tests**: 9 added (estimator), 150 passing, 0 failing · 콘솔 0 · 수동비행 무회귀(peakAlt 119) · nav 행동검증 PASS
+**Decisions**:
+- 오토파일럿 입력을 navSource로 분기: truth/measured/estimated(기본). 매 프레임 sense(updateSensors)→estimate(updateNavEstimate)→control(autopilot.tick) 순서로 재배치(updateSensors를 pushHud 앞→오토파일럿 앞으로 이동).
+- estimator.js: 등속도 1-D 칼만(GPS x/z/고도 융합, 위치+속도) + 1차 저역통과(자세 pitch/roll·각속도 p/q). 순수 함수, TDD.
+- 추정기는 노이즈 저감하나 bias 불가 → GPS 스푸핑이 오토파일럿 항법을 끌고감(HILS 교훈). 검증: bias200 주입 → estimated.x→199.6, truth.x=0.
+- 칼만 q/r 튜닝: pos {q1.5,r2.5}, alt {q1,r1}. 저역통과 cutoff 18(자세)/25(각속도).
+- 결정론: 추정기는 measured(시드PRNG) 기반이라 physics 결정론 불변. 센서는 1프레임 최신값 사용(이동된 순서로 동일프레임).
+**Next**:
+- 다축 EKF / INS-GPS tightly-coupled, FDE + "NAV DEGRADED" HUD, 또는 데모 미션 내장(헤드리스 미션 회귀)
+**Notes**:
+- 콘솔 시연: setNavSource('measured'|'estimated'|'truth') 비교. injectFault('gpsX',{type:'bias',value:300}) 후 window.__hils.nav.estimated.x vs window.__hils.measured._truth.gpsX — 오토파일럿이 가짜 위치 믿음.
+- 미션 자동비행(QGC AUTO)에서 estimated로 비행하므로, 스푸핑 시 항로 이탈을 QGC에서 관찰 가능(수동 확인 권장).
+- 헤드리스 재현: node tests/nav-check.mjs <url> <port>.
+- 주: GPS 센서 자체 1차 지연(bw3)이 이미 measured를 매끄럽게 해, 칼만의 추가 평활은 작게 보임(0.112 vs 0.138). 칼만의 본 가치는 속도추정 + 바이어스 불가역 시연.

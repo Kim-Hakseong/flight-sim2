@@ -51,6 +51,7 @@ import {
 import { DT_PHYS, MAX_SUBSTEPS, planSteps, rk4Step } from './fixedStep.js';
 import { stepActuator } from './actuators.js';
 import { makeRng, stepSensor } from './sensors.js';
+import { createKF, kfStep, lowpassStep } from './estimator.js';
 
 const THREE = window.THREE;
 
@@ -150,13 +151,29 @@ const SENSOR_CFG = {
 const hilsFaults = {};
 const sensorRng = makeRng(0xC0FFEE);       // seeded → deterministic noise
 let measured = {};                         // latest measured (sensor) values
+
+// Sensor-in-the-loop (M11): the autopilot flies on the navigation SOURCE below.
+//   'truth'     — perfect state (legacy)
+//   'measured'  — raw sensor values fed straight to the controller
+//   'estimated' — sensors fused by a Kalman/low-pass estimator (default)
+// The estimator rejects random noise but not bias — so a GPS spoof still fools
+// the autopilot, which is exactly the HILS lesson.
+let navSource = 'estimated';
+const DEG2RAD = Math.PI / 180;
+let kfX = createKF(), kfZ = createKF(), kfY = createKF();
+const navLP = { pitch: 0, roll: 0, p: 0, q: 0 };
+let navEstimate = null;                    // { estimated, measured } autopilot inputs
+
 if (typeof window !== 'undefined') {
   window.injectFault = (target, fault) => { hilsFaults[target] = fault || null; };
   window.clearFaults = () => { for (const k of Object.keys(hilsFaults)) delete hilsFaults[k]; };
+  window.setNavSource = (s) => { if (['truth', 'measured', 'estimated'].includes(s)) navSource = s; };
   window.__hils = {
     get measured() { return measured; },
     get actuators() { return sim.actuators; },
     get faults() { return hilsFaults; },
+    get navSource() { return navSource; },
+    get nav() { return navEstimate; },
   };
 }
 
@@ -337,6 +354,9 @@ function resetAircraft() {
   sim.orientation.identity();
   sim.omega.set(0, 0, 0);
   sim.actuators.elevator = sim.actuators.aileron = sim.actuators.rudder = 0;
+  kfX = createKF(sim.position.x); kfZ = createKF(sim.position.z); kfY = createKF(0);
+  navLP.pitch = navLP.roll = navLP.p = navLP.q = 0;
+  navEstimate = null; measured = {};
   sim.status = 'OK';
   sim.vsi = 0;
   sim.gForce = 1.0;
@@ -430,30 +450,36 @@ function loop(now) {
       if (pad.throttle !== null)      controls.throttle = pad.throttle;
     }
 
+    // Sense → estimate → control (M11). Update the sensor model and the nav
+    // estimate first, so the autopilot flies on the selected navSource.
+    updateSensors(dt);
+    updateNavEstimate(dt);
+
     // Autopilot override (AUTO mission). Computed before stepPhysics so the
     // physics layer just sees control inputs as usual.
     //
-    // We compute attitude directly from the orientation rather than using
-    // Euler angles so the bank/pitch sign convention is unambiguous:
+    // Truth attitude is computed directly from the orientation so the bank/pitch
+    // sign convention is unambiguous:
     //   bank   > 0 when the right wing is down (matches CLAUDE.md §3)
     //   pitch  > 0 when the nose is up
     const fwdAP = tmpForward.set(0, 0, -1).applyQuaternion(sim.orientation);
     const rightAP = tmpRight.set(1, 0, 0).applyQuaternion(sim.orientation);
-    const headingRadAP = Math.atan2(fwdAP.x, -fwdAP.z);
-    const pitchRadAP = Math.asin(Math.max(-1, Math.min(1, fwdAP.y)));
-    const bankRadAP  = -Math.asin(Math.max(-1, Math.min(1, rightAP.y)));
-    const apOut = autopilot.tick({
+    const truthAP = {
       x: sim.position.x, y: sim.position.y, z: sim.position.z,
       vx: sim.velocity.x, vy: sim.velocity.y, vz: sim.velocity.z,
-      headingRad: headingRadAP,
-      pitchRad: pitchRadAP,
-      bankRad: bankRadAP,
-      // Body angular velocity → aviation convention.
-      // Body +X = right wing → ω.x = nose pitch rate (CLAUDE.md sign matches: +ω.x = pitch up).
-      // Body −Z = nose; +ω.z = LEFT roll, so right-roll rate = −ω.z.
+      headingRad: Math.atan2(fwdAP.x, -fwdAP.z),
+      pitchRad: Math.asin(Math.max(-1, Math.min(1, fwdAP.y))),
+      bankRad: -Math.asin(Math.max(-1, Math.min(1, rightAP.y))),
+      // Body +X = right wing → ω.x = nose pitch rate. Body −Z = nose; +ω.z =
+      // LEFT roll, so right-roll rate = −ω.z.
       pitchRate: sim.omega.x,
       rollRate: -sim.omega.z,
-    });
+    };
+    // Pick what the autopilot actually sees: truth, raw sensors, or fused estimate.
+    const apInput = (navSource === 'truth' || !navEstimate)
+      ? truthAP
+      : navEstimate[navSource];
+    const apOut = autopilot.tick(apInput);
     if (apOut) {
       controls.pitch = apOut.pitch;
       controls.roll = apOut.roll;
@@ -536,7 +562,6 @@ function loop(now) {
   audio.setWind(sim.velocity.length());
   audio.setStall(sim.status === 'STALL', dt);
 
-  updateSensors(dt);
   pushHud();
 
   // Snapshot the live state every frame; recorder ignores it when stopped.
@@ -898,8 +923,8 @@ const _sensFwd = new THREE.Vector3();
 const _sensRight = new THREE.Vector3();
 
 // Compute the truth state and the corresponding measured (sensor) state, with
-// per-channel error + any injected fault. Observation only — never feeds the
-// control loop, so it can't destabilize flight. Exposed via window.__hils.
+// per-channel error + any injected fault. Exposed via window.__hils; also feeds
+// the autopilot through the estimator when navSource is 'measured'/'estimated'.
 function updateSensors(dt) {
   _sensFwd.set(0, 0, -1).applyQuaternion(sim.orientation);
   _sensRight.set(1, 0, 0).applyQuaternion(sim.orientation);
@@ -922,6 +947,41 @@ function updateSensors(dt) {
   }
   next._truth = truth;
   measured = next;
+}
+
+// Estimate the navigation state the autopilot flies on, from the measured
+// sensors: GPS x/z/alt fused by a constant-velocity Kalman filter, attitude and
+// rates low-passed. Produces both a raw 'measured' input and a fused 'estimated'
+// input (selected by navSource). Run after updateSensors, before autopilot.tick.
+function updateNavEstimate(dt) {
+  const m = measured;
+  if (m.gpsX === undefined) { navEstimate = null; return; }
+  const gear = aircraft.userData.gearOffset;
+
+  kfX = kfStep(kfX, m.gpsX, dt, { q: 1.5, r: 2.5 });
+  kfZ = kfStep(kfZ, m.gpsZ, dt, { q: 1.5, r: 2.5 });
+  kfY = kfStep(kfY, m.altitude, dt, { q: 1.0, r: 1.0 });
+  navLP.pitch = lowpassStep(navLP.pitch, m.pitch * DEG2RAD, dt, 18);
+  navLP.roll = lowpassStep(navLP.roll, m.roll * DEG2RAD, dt, 18);
+  navLP.q = lowpassStep(navLP.q, m.q * DEG2RAD, dt, 25);
+  navLP.p = lowpassStep(navLP.p, m.p * DEG2RAD, dt, 25);
+
+  navEstimate = {
+    estimated: {
+      x: kfX.x, y: kfY.x + gear, z: kfZ.x,
+      vx: kfX.v, vy: kfY.v, vz: kfZ.v,
+      headingRad: m.heading * DEG2RAD,
+      pitchRad: navLP.pitch, bankRad: navLP.roll,
+      pitchRate: navLP.q, rollRate: navLP.p,
+    },
+    measured: {
+      x: m.gpsX, y: m.altitude + gear, z: m.gpsZ,
+      vx: sim.velocity.x, vy: sim.velocity.y, vz: sim.velocity.z,
+      headingRad: m.heading * DEG2RAD,
+      pitchRad: m.pitch * DEG2RAD, bankRad: m.roll * DEG2RAD,
+      pitchRate: m.q * DEG2RAD, rollRate: m.p * DEG2RAD,
+    },
+  };
 }
 
 function pushHud() {
