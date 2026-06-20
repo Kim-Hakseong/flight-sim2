@@ -453,3 +453,21 @@
 **Notes**:
 - 횡력은 직진비행(β≈0)엔 영향 거의 없음 — 슬립/요 입력(Q/E) 시 측면 가속·조화선회로 체감.
 - 기존 fly-check/console-check 그대로 PASS — 횡력 추가가 이륙·상승 거동 깨지 않음 확인.
+
+## 2026-06-20 18:13 — M9: 센서·액추에이터 모델 + 결함 주입 (HILS I/O)
+
+**Status**: GREEN
+**Files changed**: src/actuators.js (new), src/sensors.js (new), src/main.js, tests/actuators.test.mjs (new), tests/sensors.test.mjs (new), tests/hils-check.mjs (new), PRD.md
+**Tests**: 23 added (actuator 9 + sensor 14), 134 passing, 0 failing · 콘솔 에러 0 · HILS 결함주입 검증 PASS · 정상비행 유지(peakAlt 120)
+**Decisions**:
+- truth ↔ measured/commanded 분리. 액추에이터=command→physics 경로 삽입(rate/bandwidth/limit + stuck/offset/float/slow), 센서=관측 탭(제어 루프 밖 → 비행 안정성 불변).
+- 센서 노이즈는 시드 PRNG(mulberry32) + Box-Muller 가우시안 → M7 결정론 유지(Math.random 금지). 센서는 물리에 영향 없어 physics 결정론도 보존.
+- 결함 API: window.injectFault(target,fault)/clearFaults(), window.__hils{measured,actuators,faults}. 콘솔에서 즉시 주입.
+- 액추에이터 기본값 near-ideal(bw25, rate10) → 비행감 유지, 결함 시에만 거동 변화.
+- 버그 2건(TDD로 포착·수정): 액추에이터 offset, 센서 bias 모두 "출력 후가산→피드백 런어웨이". 목표(target/reading) 바이어스로 모델링해 수렴화. 센서 회귀테스트는 반복호출로 런어웨이 검출하도록 추가.
+**Next**:
+- M9-follow: 센서-in-the-loop(measured→오토파일럿/칼만), 또는 텔레메트리에 measured 송신(QGC GPS 재밍 시연)
+**Notes**:
+- 콘솔 시연: injectFault('elevator',{type:'stuck'}) / injectFault('altitude',{type:'bias',value:50}) / injectFault('gpsX',{type:'frozen'}) / clearFaults(). 확인: window.__hils.measured vs window.__hils.measured._truth.
+- 헤드리스 재현: node tests/hils-check.mjs <url> <port>.
+- 센서 rng는 프레임당 진행 → 기계 간 frame-count 결정론 아님(M7 caveat 동일). 단 physics 미영향이라 물리 재현성은 보존.

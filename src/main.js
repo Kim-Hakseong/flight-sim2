@@ -49,6 +49,8 @@ import {
   STALL_AOA_RAD,
 } from './physics.js';
 import { DT_PHYS, MAX_SUBSTEPS, planSteps, rk4Step } from './fixedStep.js';
+import { stepActuator } from './actuators.js';
+import { makeRng, stepSensor } from './sensors.js';
 
 const THREE = window.THREE;
 
@@ -123,6 +125,41 @@ const AIRCRAFT = {
   rollSAS: 0.25,
 };
 
+// ---------- HILS I/O layer (M9): actuator + sensor models + fault injection ----------
+// Actuator config: realistic but near-ideal so nominal flight feel is preserved.
+const ACTUATOR_CFG = { bandwidth: 25, rateLimit: 10, min: -1, max: 1 };
+// Sensor error config per channel (bias/scale/noise σ in the channel's unit,
+// bandwidth = lag). Tuned to plausible light-aircraft avionics; sensors are an
+// observation tap (not in the control loop), so noise never destabilizes flight.
+const SENSOR_CFG = {
+  airspeed: { noise: 0.4, bandwidth: 8 },   // m/s
+  altitude: { noise: 0.6, bandwidth: 6 },   // m  (baro)
+  pitch:    { noise: 0.1, bandwidth: 20 },  // deg
+  roll:     { noise: 0.1, bandwidth: 20 },  // deg
+  heading:  { noise: 0.2, bandwidth: 15 },  // deg
+  p:        { noise: 0.3, bandwidth: 30 },  // deg/s (IMU gyro)
+  q:        { noise: 0.3, bandwidth: 30 },
+  r:        { noise: 0.3, bandwidth: 30 },
+  gpsX:     { noise: 1.5, bandwidth: 3 },   // m
+  gpsZ:     { noise: 1.5, bandwidth: 3 },
+};
+// Fault registry — null = healthy. Inject from the console:
+//   injectFault('elevator', {type:'stuck'})        // actuator
+//   injectFault('altitude', {type:'bias', value:50}) // sensor
+//   injectFault('gpsX', {type:'frozen'})  /  clearFaults()
+const hilsFaults = {};
+const sensorRng = makeRng(0xC0FFEE);       // seeded → deterministic noise
+let measured = {};                         // latest measured (sensor) values
+if (typeof window !== 'undefined') {
+  window.injectFault = (target, fault) => { hilsFaults[target] = fault || null; };
+  window.clearFaults = () => { for (const k of Object.keys(hilsFaults)) delete hilsFaults[k]; };
+  window.__hils = {
+    get measured() { return measured; },
+    get actuators() { return sim.actuators; },
+    get faults() { return hilsFaults; },
+  };
+}
+
 const sim = {
   // World-frame state.
   position: new THREE.Vector3(0, 0, 0),
@@ -131,6 +168,9 @@ const sim = {
   orientation: new THREE.Quaternion(),
   // Body angular velocity (rad/s) in body frame.
   omega: new THREE.Vector3(0, 0, 0),
+
+  // Actuator surface positions (normalized) — lag behind the commands.
+  actuators: { elevator: 0, aileron: 0, rudder: 0 },
 
   status: 'OK', // OK | STALL | CRASH
   vsi: 0,
@@ -296,6 +336,7 @@ function resetAircraft() {
   sim.velocity.set(0, 0, 0);
   sim.orientation.identity();
   sim.omega.set(0, 0, 0);
+  sim.actuators.elevator = sim.actuators.aileron = sim.actuators.rudder = 0;
   sim.status = 'OK';
   sim.vsi = 0;
   sim.gForce = 1.0;
@@ -495,6 +536,7 @@ function loop(now) {
   audio.setWind(sim.velocity.length());
   audio.setStall(sim.status === 'STALL', dt);
 
+  updateSensors(dt);
   pushHud();
 
   // Snapshot the live state every frame; recorder ignores it when stopped.
@@ -622,9 +664,17 @@ function stepPhysics(dt) {
   // Controls become surface deflections; aerodynamic + gyroscopic moments and the
   // inertia tensor produce angular acceleration. We work in aviation rates
   // (p=roll-right, q=pitch-up, r=yaw-right) then map back to sim body ω.
-  const elevator = controls.pitch * ctrl;
-  const aileron  = controls.roll  * ctrl;
-  const rudder   = controls.yaw   * ctrl;
+  //
+  // Commands pass through the actuator model first (rate/bandwidth/limits + any
+  // injected fault), so what the airframe sees lags the stick — and a stuck or
+  // floating surface behaves accordingly. ctrl is the damage-authority multiplier.
+  const act = sim.actuators;
+  act.elevator = stepActuator(act.elevator, controls.pitch, dt, ACTUATOR_CFG, hilsFaults.elevator);
+  act.aileron  = stepActuator(act.aileron,  controls.roll,  dt, ACTUATOR_CFG, hilsFaults.aileron);
+  act.rudder   = stepActuator(act.rudder,   controls.yaw,   dt, ACTUATOR_CFG, hilsFaults.rudder);
+  const elevator = act.elevator * ctrl;
+  const aileron  = act.aileron  * ctrl;
+  const rudder   = act.rudder   * ctrl;
 
   // Roll SAS: gentle restoring roll moment toward wings-level when the pilot
   // isn't commanding roll (real airframes aren't bank-stable). Scaled by qbar so
@@ -841,6 +891,37 @@ function crash(x, y, z) {
   emitBurst(effects.smoke,  90, x, y, z, 0, 8, 0, 14);
   emitBurst(effects.sparks, 50, x, y, z, 0, 18, 0, 25);
   audio.playExplosion();
+}
+
+const SENSOR_RAD2DEG = 180 / Math.PI;
+const _sensFwd = new THREE.Vector3();
+const _sensRight = new THREE.Vector3();
+
+// Compute the truth state and the corresponding measured (sensor) state, with
+// per-channel error + any injected fault. Observation only — never feeds the
+// control loop, so it can't destabilize flight. Exposed via window.__hils.
+function updateSensors(dt) {
+  _sensFwd.set(0, 0, -1).applyQuaternion(sim.orientation);
+  _sensRight.set(1, 0, 0).applyQuaternion(sim.orientation);
+  const truth = {
+    airspeed: sim.velocity.length(),
+    altitude: Math.max(0, sim.position.y - aircraft.userData.gearOffset),
+    pitch: Math.asin(Math.max(-1, Math.min(1, _sensFwd.y))) * SENSOR_RAD2DEG,
+    roll: -Math.asin(Math.max(-1, Math.min(1, _sensRight.y))) * SENSOR_RAD2DEG,
+    heading: ((Math.atan2(_sensFwd.x, -_sensFwd.z) * SENSOR_RAD2DEG) + 360) % 360,
+    p: -sim.omega.z * SENSOR_RAD2DEG,
+    q: sim.omega.x * SENSOR_RAD2DEG,
+    r: sim.omega.y * SENSOR_RAD2DEG,
+    gpsX: sim.position.x,
+    gpsZ: sim.position.z,
+  };
+  const next = {};
+  for (const ch of Object.keys(SENSOR_CFG)) {
+    const prev = (measured[ch] !== undefined) ? measured[ch] : truth[ch];
+    next[ch] = stepSensor(prev, truth[ch], dt, SENSOR_CFG[ch], sensorRng, hilsFaults[ch]);
+  }
+  next._truth = truth;
+  measured = next;
 }
 
 function pushHud() {
