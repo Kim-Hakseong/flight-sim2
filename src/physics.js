@@ -77,3 +77,100 @@ export function angleOfAttack(velocity, forward, up) {
   if (Math.abs(vF) < 1e-6 && Math.abs(vU) < 1e-6) return 0;
   return Math.atan2(-vU, vF);
 }
+
+// ===================================================================
+// Moment-based 6-DOF rotational dynamics (M8).
+//
+// Aviation rate convention (so derivative signs read like a textbook):
+//   p = roll-right (right wing down) +,  q = pitch-up +,  r = yaw-right +
+//   β = +  when the relative wind has a component toward the +X (right) wing.
+// main.js maps these to the sim's body angular velocity: q=ω.x, r=ω.y, p=−ω.z.
+// ===================================================================
+
+// Mass moments of inertia for a ~1000 kg light aircraft (kg·m²). Ixz is the
+// roll↔yaw product of inertia (small for a symmetric airframe).
+export const INERTIA = { Ixx: 1300, Iyy: 1800, Izz: 2700, Ixz: 60 };
+
+// Dimensionless stability & control derivatives. Static stability: Cm_alpha<0
+// (pitch), Cn_beta>0 (weathercock), Cl_beta<0 (dihedral). Rate terms are damping.
+// Control power (Cm_de/Cl_da/Cn_dr) is sized so authority at cruise (~50 m/s)
+// is comparable to the previous rate-command model, keeping the aircraft flyable.
+export const AERO_DERIV = {
+  // pitch (Cm, nose-up +)
+  Cm0: 0.04, Cm_alpha: -0.9, Cm_q: -18, Cm_de: 1.5,
+  // roll (Cl, roll-right +)
+  Cl_beta: -0.08, Cl_p: -0.45, Cl_da: 0.12,
+  // yaw (Cn, yaw-right +)
+  Cn_beta: 0.12, Cn_r: -0.18, Cn_dr: 0.10,
+};
+
+/**
+ * Sideslip angle β (radians) from the velocity vector and body axes.
+ * +β when the relative wind has a component toward the +X (right) wing.
+ */
+export function sideslipAngle(velocity, forward, right) {
+  const vF = velocity.x * forward.x + velocity.y * forward.y + velocity.z * forward.z;
+  const vR = velocity.x * right.x + velocity.y * right.y + velocity.z * right.z;
+  if (Math.abs(vF) < 1e-6 && Math.abs(vR) < 1e-6) return 0;
+  return Math.atan2(vR, vF);
+}
+
+/**
+ * Aerodynamic moments (N·m) from the stability & control derivative buildup.
+ * Returns { L, M, N } in the aviation convention (roll-right, pitch-up, yaw-right +).
+ * Rate terms are nondimensionalized by the usual span/chord over 2V factors.
+ */
+export function aeroMoments({
+  qbar, S, span, chord, V,
+  alpha = 0, beta = 0, p = 0, q = 0, r = 0,
+  elevator = 0, aileron = 0, rudder = 0,
+  deriv = AERO_DERIV,
+}) {
+  const d = (k) => deriv[k] || 0;
+  const Vs = Math.max(V, 1e-3);
+  const phat = p * span / (2 * Vs);
+  const qhat = q * chord / (2 * Vs);
+  const rhat = r * span / (2 * Vs);
+
+  const Cl = d('Cl_beta') * beta + d('Cl_p') * phat + d('Cl_da') * aileron;
+  const Cm = d('Cm0') + d('Cm_alpha') * alpha + d('Cm_q') * qhat + d('Cm_de') * elevator;
+  const Cn = d('Cn_beta') * beta + d('Cn_r') * rhat + d('Cn_dr') * rudder;
+
+  return {
+    L: qbar * S * span * Cl,
+    M: qbar * S * chord * Cm,
+    N: qbar * S * span * Cn,
+  };
+}
+
+/**
+ * Angular acceleration from Euler's rigid-body equation:
+ *     ω̇ = I⁻¹ · (M − ω × (I·ω))
+ * Specialized for an airframe symmetric about the X–Z plane (only Ixz coupling).
+ * Inputs are not mutated. Returns { dp, dq, dr }.
+ */
+export function bodyAngularAccel({ p, q, r }, { L, M, N }, inertia = INERTIA) {
+  const { Ixx, Iyy, Izz, Ixz } = inertia;
+
+  // Angular momentum H = I·ω  (with the Ixz product of inertia coupling p↔r).
+  const Hx = Ixx * p + Ixz * r;
+  const Hy = Iyy * q;
+  const Hz = Ixz * p + Izz * r;
+
+  // Gyroscopic term ω × H.
+  const gx = q * Hz - r * Hy;
+  const gy = r * Hx - p * Hz;
+  const gz = p * Hy - q * Hx;
+
+  // RHS = M − ω×H.
+  const rx = L - gx;
+  const ry = M - gy;
+  const rz = N - gz;
+
+  // Pitch axis decouples; roll/yaw share the 2×2 [Ixx Ixz; Ixz Izz] block.
+  const dq = ry / Iyy;
+  const det = Ixx * Izz - Ixz * Ixz;
+  const dp = (Izz * rx - Ixz * rz) / det;
+  const dr = (Ixx * rz - Ixz * rx) / det;
+  return { dp, dq, dr };
+}

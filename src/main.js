@@ -40,10 +40,14 @@ import {
   liftForce,
   dragForce,
   angleOfAttack,
+  sideslipAngle,
+  aeroMoments,
+  bodyAngularAccel,
+  INERTIA,
   GRAVITY,
   STALL_AOA_RAD,
 } from './physics.js';
-import { DT_PHYS, MAX_SUBSTEPS, planSteps } from './fixedStep.js';
+import { DT_PHYS, MAX_SUBSTEPS, planSteps, rk4Step } from './fixedStep.js';
 
 const THREE = window.THREE;
 
@@ -108,17 +112,14 @@ scene.add(aircraft);
 const AIRCRAFT = {
   mass: 1000,        // kg
   wingArea: 16,      // m^2
+  span: 11,          // m  (AR ≈ 7.5)
+  chord: 1.46,       // m  (= wingArea / span, mean aerodynamic chord)
   maxThrust: 4500,   // N (peak engine thrust at full throttle)
-  // Control authority (rad/s per unit input).
-  pitchRate: 1.6,
-  rollRate: 2.4,
-  yawRate: 0.8,
-  // Damping (rad/s of decay per rad/s of body angular velocity).
-  pitchDamp: 1.4,
-  rollDamp: 2.0,
-  yawDamp: 1.2,
-  // Auto-stabilization: tiny pull toward zero pitch/roll when no input.
-  autoLevel: 0.6,
+  // Roll stability augmentation: gentle restoring roll moment toward wings-level
+  // when the pilot isn't commanding roll. Real airframes are not bank-stable;
+  // this is an explicit SAS for flyability (sanctioned by PRD §9 risk table).
+  // Expressed as an extra roll-moment coefficient per radian of bank.
+  rollSAS: 0.25,
 };
 
 const sim = {
@@ -600,35 +601,59 @@ function emitOngoingEffects(now) {
 }
 
 function stepPhysics(dt) {
-  // --- 1. Apply control inputs to body angular velocity ---
-  // pitch input → angular velocity around body +X (right wing).
-  // roll input  → around body -Z (nose). +roll = right wing down → ω_z = -roll.
-  // yaw input   → around body +Y (up).
-  const targetOmegaX =  controls.pitch * AIRCRAFT.pitchRate;
-  const targetOmegaY =  controls.yaw   * AIRCRAFT.yawRate;
-  const targetOmegaZ = -controls.roll  * AIRCRAFT.rollRate;
+  // --- 1. Aerodynamic state from the current orientation ---
+  // (body axes BEFORE this step's rotation; forces below recompute them after.)
+  tmpForward.set(0, 0, -1).applyQuaternion(sim.orientation);
+  tmpUp.set(0, 1, 0).applyQuaternion(sim.orientation);
+  tmpRight.set(1, 0, 0).applyQuaternion(sim.orientation);
 
-  // Damaged tail reduces control authority.
-  const ctrl = controlMultiplier(sim.damage);
-  // First-order approach + damping (scaled by control authority).
-  sim.omega.x += (targetOmegaX * ctrl - sim.omega.x) * Math.min(1, dt * 6);
-  sim.omega.y += (targetOmegaY * ctrl - sim.omega.y) * Math.min(1, dt * 6);
-  sim.omega.z += (targetOmegaZ * ctrl - sim.omega.z) * Math.min(1, dt * 6);
+  const rhoNow = airDensity(Math.max(0, sim.position.y));
+  const vRel = sim.velocity.length();
+  let aoaNow = 0, betaNow = 0;
+  if (vRel > 0.5) {
+    aoaNow = angleOfAttack(sim.velocity, tmpForward, tmpUp);
+    betaNow = sideslipAngle(sim.velocity, tmpForward, tmpRight);
+  }
+  const qbar = 0.5 * rhoNow * vRel * vRel;
+  const ctrl = controlMultiplier(sim.damage); // damaged tail reduces authority
 
-  // Damping toward zero when no input held (key released).
-  if (controls.pitch === 0) sim.omega.x *= Math.exp(-AIRCRAFT.pitchDamp * dt);
-  if (controls.yaw === 0)   sim.omega.y *= Math.exp(-AIRCRAFT.yawDamp * dt);
-  if (controls.roll === 0)  sim.omega.z *= Math.exp(-AIRCRAFT.rollDamp * dt);
+  // --- 2. Moment-based rotational dynamics (Euler's equation, RK4-integrated) ---
+  // Controls become surface deflections; aerodynamic + gyroscopic moments and the
+  // inertia tensor produce angular acceleration. We work in aviation rates
+  // (p=roll-right, q=pitch-up, r=yaw-right) then map back to sim body ω.
+  const elevator = controls.pitch * ctrl;
+  const aileron  = controls.roll  * ctrl;
+  const rudder   = controls.yaw   * ctrl;
 
-  // --- 2. Integrate orientation ---
+  // Roll SAS: gentle restoring roll moment toward wings-level when the pilot
+  // isn't commanding roll (real airframes aren't bank-stable). Scaled by qbar so
+  // it fades at low speed / on the ground. PRD §9 sanctions this augmentation.
+  sim.euler.setFromQuaternion(sim.orientation, 'YXZ');
+  const bank = sim.euler.z;
+  const sasRoll = (controls.roll === 0)
+    ? -AIRCRAFT.rollSAS * qbar * AIRCRAFT.wingArea * AIRCRAFT.span * bank
+    : 0;
+
+  const omegaDeriv = (_t, y) => {
+    const [p, q, r] = y;
+    const m = aeroMoments({
+      qbar, S: AIRCRAFT.wingArea, span: AIRCRAFT.span, chord: AIRCRAFT.chord, V: vRel,
+      alpha: aoaNow, beta: betaNow, p, q, r, elevator, aileron, rudder,
+    });
+    const a = bodyAngularAccel({ p, q, r }, { L: m.L + sasRoll, M: m.M, N: m.N }, INERTIA);
+    return [a.dp, a.dq, a.dr];
+  };
+
+  const [p1, q1, r1] = rk4Step([-sim.omega.z, sim.omega.x, sim.omega.y], 0, dt, omegaDeriv);
+  sim.omega.x = q1;   // q  → pitch-up about body +X
+  sim.omega.y = r1;   // r  → yaw-right about body +Y
+  sim.omega.z = -p1;  // p  → roll-right is −ω.z
+
+  // --- 2b. Integrate orientation ---
   const w = sim.omega;
   // Quaternion derivative: q' = 0.5 * q * (0, ω_body)
   const wq = new THREE.Quaternion(w.x * dt * 0.5, w.y * dt * 0.5, w.z * dt * 0.5, 1);
   sim.orientation.multiply(wq).normalize();
-
-  // Mild auto-level: gentle restoring torque toward wings-level + nose-level
-  // (only when pilot isn't actively flying that axis).
-  applyAutoLevel(dt);
 
   // --- 3. Body axes in world frame ---
   tmpForward.set(0, 0, -1).applyQuaternion(sim.orientation);
@@ -809,19 +834,6 @@ function crash(x, y, z) {
   emitBurst(effects.smoke,  90, x, y, z, 0, 8, 0, 14);
   emitBurst(effects.sparks, 50, x, y, z, 0, 18, 0, 25);
   audio.playExplosion();
-}
-
-function applyAutoLevel(dt) {
-  // Decompose orientation to euler (YXZ: yaw, pitch, roll).
-  sim.euler.setFromQuaternion(sim.orientation, 'YXZ');
-  const pitch = sim.euler.x;
-  const roll  = sim.euler.z;
-
-  // Add small restoring angular velocity toward 0 — only on axes pilot isn't using.
-  const k = AIRCRAFT.autoLevel;
-  if (controls.pitch === 0) sim.omega.x += (-pitch) * k * dt;
-  if (controls.roll === 0)  sim.omega.z += ( roll)  * k * dt;
-  // (Yaw isn't auto-leveled — heading is intentional.)
 }
 
 function pushHud() {

@@ -417,3 +417,24 @@
 - Mac Mini 실기 확인: index.html 더블클릭 → 비행 정상, HUD 속도/고도 갱신, 프레임레이트 바꿔도(예: 모니터 60→120Hz) 비행 거동 동일해야 정상.
 - 헤드리스 재검증: `node tests/console-check.mjs <url> <cdpPort>` (Chrome --headless=new --enable-unsafe-swiftshader 필요).
 - physAccum는 paused/CRASH 시 누적 안 함(블록 내부에서만 += dt). replay/HITL 분기는 물리 미실행이라 영향 없음.
+
+## 2026-06-20 17:14 — M8: 모멘트 기반 6-DOF 회전 동역학
+
+**Status**: GREEN
+**Files changed**: src/physics.js, src/main.js, tests/sixdof.test.mjs (new), tests/fly-check.mjs (new), PRD.md
+**Tests**: 19 added (sixdof), 106 passing, 0 failing · 브라우저 콘솔 에러 0 · 행동검증 PASS(이륙·상승)
+**Decisions**:
+- 회전: 레이트 직접제어 → 공력 모멘트/관성텐서/오일러 강체방정식(ω̇=I⁻¹(M−ω×Iω), Ixz 커플링). ω 적분은 M7 rk4Step 실사용(자이로·감쇠 항 서브스텝 재평가).
+- 안정·조종 미계수 빌드업(Cm/Cl/Cn) + 사이드슬립 β 신규. 정적안정 Cm_α<0·Cn_β>0·Cl_β<0, 감쇠 Cm_q/Cl_p/Cn_r<0.
+- 부호 규약 보존: 항공 레이트 (p,q,r) ↔ sim ω 매핑 q=ω.x, r=ω.y, p=−ω.z. 제어→deflection(elevator=pitch, aileron=roll, rudder=yaw). HUD·오토파일럿 무변경.
+- attitude auto-level(applyAutoLevel) 제거 — 실제 정적안정이 대체. 비행성용 약한 롤 SAS(rollSAS=0.25, qbar 스케일)만 유지(PRD §9 sanction).
+- 미계수/관성/제어권한은 순항(~50 m/s)에서 기존 권한과 유사하도록 사이징 → 비행성 유지. 병진은 M8 범위 외(불변).
+- 관성: Ixx1300/Iyy1800/Izz2700/Ixz60 (1000 kg 경항공기급).
+**Next**:
+- M8-follow: 사이드포스(CY_β)로 병진까지 6-DOF 완성
+- 또는 #4 센서/액추에이터 모델(HILS 결함주입)
+**Notes**:
+- 행동검증: tests/fly-check.mjs (CDP로 키 주입→HUD 관측). 결과: 13s 풀스로틀 46 m/s, 조종사형 피치 펄스로 상승 peakAlt 121m, status OK, NaN/크래시 없음.
+- 풀 엘리베이터를 저속에서 계속 당기면 과회전→실속(물리적으로 정상). 부드러운 입력이 필요 — 기존 레이트제어보다 "진짜 비행기"처럼 거동.
+- Mac Mini 실기 확인: 뱅크 후 약하게 수평 복귀(롤 SAS), 피치는 트림 받음각으로 수렴(레벨 유지 아님=정상). 오토파일럿 미션(M 키) 안정성도 눈으로 확인 권장.
+- 헤드리스 재현: `node tests/fly-check.mjs <url> <port>` (Chrome --headless=new --enable-unsafe-swiftshader).
