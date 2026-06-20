@@ -98,10 +98,12 @@ export const INERTIA = { Ixx: 1300, Iyy: 1800, Izz: 2700, Ixz: 60 };
 export const AERO_DERIV = {
   // pitch (Cm, nose-up +)
   Cm0: 0.04, Cm_alpha: -0.9, Cm_q: -18, Cm_de: 1.5,
-  // roll (Cl, roll-right +)
-  Cl_beta: -0.08, Cl_p: -0.45, Cl_da: 0.12,
-  // yaw (Cn, yaw-right +)
-  Cn_beta: 0.12, Cn_r: -0.18, Cn_dr: 0.10,
+  // roll (Cl, roll-right +). Lower aileron power + stronger roll damping give a
+  // realistic light-aircraft roll rate (~70°/s) instead of a fighter-like snap.
+  Cl_beta: -0.07, Cl_p: -0.55, Cl_da: 0.10,
+  // yaw (Cn, yaw-right +). Strong yaw-rate damping (Cn_r) is what keeps the
+  // dutch-roll mode damped so a banked turn settles instead of diverging.
+  Cn_beta: 0.10, Cn_r: -0.75, Cn_dr: 0.12,
   // side force (CY along +X right wing). CY_beta<0 ⇒ sideslip is opposed.
   CY_beta: -0.30,
 };

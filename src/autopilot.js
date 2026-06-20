@@ -31,35 +31,59 @@ const TAKEOFF_PITCH   = 8 * Math.PI / 180;
 const GROUND_OFFSET   = 0.8;       // matches aircraft.userData.gearOffset
 
 // Outer-loop limits.
-const MAX_BANK  = 18 * Math.PI / 180;   // 18° — gentle, well-damped turns
+const MAX_BANK  = 14 * Math.PI / 180;   // 14° — gentle turns bleed little speed
 const MAX_PITCH = 8 * Math.PI / 180;    // 8° — a sustainable climb at full power
 // Outer-loop gains.
 const HEADING_TO_BANK = 0.6;            // gentle heading→bank (avoid bank overshoot)
 
-// TECS-lite longitudinal: pitch holds the energy BALANCE (climb when low, but
-// trade altitude for speed when slow → stall-proof); throttle holds TOTAL energy
-// (add power when low OR slow). Turn compensation adds back-pressure for the bank.
-const ALT_ERR_SCALE   = 40;             // m — normalizes altitude error
-const PITCH_FROM_ALT  = MAX_PITCH;      // full climb pitch at ≥ALT_ERR_SCALE below
-const PITCH_FROM_SPEED = 0.40;          // rad per normalized speed error (nose down when slow)
+// Longitudinal control (classic separation): pitch holds altitude, throttle holds
+// airspeed. A hard speed guard forces the nose down below SAFE_SPEED so a climb or
+// turn can never stall; turn compensation adds back-pressure for the bank.
+const ALT_TO_PITCH    = 0.012;          // rad per metre of altitude error
+const SAFE_SPEED      = 42;             // m/s — below this, pitch is forced down
+const SPEED_PROT_GAIN = 0.03;           // rad per m/s below SAFE_SPEED
 const TURN_COMP       = 0.55;           // back-pressure ∝ (1/cos(bank) − 1)
-const THR_TRIM        = 0.55;
-const THR_FROM_ALT    = 0.9;   // a climb gets near-full power regardless of speed
-const THR_FROM_SPEED  = 1.6;
+const VS_DAMP         = 0.06;           // climb-rate damping → less altitude overshoot
+const VS_SCALE        = 8;              // m/s normalizing the climb rate
+const THR_TRIM        = 0.5;
+const THR_SPEED_GAIN  = 0.045;          // strong airspeed hold (ramp power when slow)
+const THR_CLIMB_FF    = 0.0008;         // small climb feedforward (per metre below)
+const THR_FLOOR       = 0.15;           // allows cruise/descent without overspeeding
 // Inner-loop gains. Gentle P with strong rate damping: the moment-based 6-DOF
 // (M8) responds fast, so an aggressive P overshoots into a PIO — and sensor
 // noise (sensor-in-the-loop) excites it. More D, less P keeps it critically-ish
 // damped on both truth and noisy estimated nav.
-const BANK_KP = 0.9;
-const ROLL_RATE_KD = 1.5;   // strong roll damping → no bank PIO into a spiral
+// Roll uses a rate-limited inner loop: bank error → a CAPPED desired roll rate →
+// aileron. The plane rolls in at a controlled rate and stops at the target bank
+// without overshooting into an unsustainable high-bank, speed-bleeding turn.
+const BANK_TO_RATE  = 1.2;   // (rad/s) desired roll rate per rad of bank error
+const MAX_ROLL_RATE = 0.25;  // rad/s — gentle roll-in (~14°/s)
+const ROLL_RATE_KP  = 2.5;   // aileron per (rad/s) roll-rate error
 const PITCH_KP = 1.0;
 const PITCH_RATE_KD = 1.0;
+const rollToBank = (targetBank, bankRad, rollRate) => {
+  const desiredRollRate = clamp((targetBank - bankRad) * BANK_TO_RATE, -MAX_ROLL_RATE, MAX_ROLL_RATE);
+  return clamp((desiredRollRate - rollRate) * ROLL_RATE_KP, -ROLL_LIMIT, ROLL_LIMIT);
+};
 
 // Limited surface authority: at cruise the elevator is very effective, so a
 // large command snaps the nose past stall before the rate term can catch it.
 const ROLL_LIMIT = 0.35;
 const PITCH_LIMIT_UP = 0.22;
 const PITCH_LIMIT_DOWN = -0.22;
+
+// Yaw damper (with washout) + sideslip coordinator. The washout high-passes the
+// yaw rate so the damper fights dutch-roll OSCILLATIONS but not the steady yaw of
+// a coordinated turn; the β term then zeros residual sideslip. Without the
+// washout a strong damper opposes the turn rate itself and induces a slip.
+const YAW_DAMP   = 1.4;  // damps dutch-roll oscillation (on the washed-out rate)
+const WASHOUT_HZ = 0.5;  // rad/s — slow washout (≈2 s); steady turn rate passes through
+const ARI        = 0.15; // aileron→rudder feedforward (anticipate adverse yaw)
+const BETA_KP    = 1.5;  // rudder toward zero sideslip → coordinated turn
+const YAW_LIMIT  = 0.7;
+let lpYawRate = 0;       // washout low-pass state (the steady component to subtract)
+const yawCommand = (rollCmd, washedYaw, beta) =>
+  clamp(ARI * rollCmd + BETA_KP * (beta || 0) - YAW_DAMP * washedYaw, -YAW_LIMIT, YAW_LIMIT);
 
 const TARGET_SPEED = 50;     // m/s cruise
 const REF_SPEED    = 44;     // m/s — gain-scheduling reference (gains tuned here)
@@ -75,6 +99,7 @@ export function startMission() {
   started = true;
   currentSeq = 0;
   phase = 'TAKEOFF';
+  lpYawRate = 0;
 }
 export function abort() { started = false; phase = 'IDLE'; }
 export function isActive() { return !!(mission && started); }
@@ -93,12 +118,18 @@ export function getPhase() { return phase; }
  *   rollRate        — body roll rate, + when rolling right wing down (rad/s)
  *   pitchRate       — body pitch rate, + when nose pitching up (rad/s)
  */
-export function tick(simState) {
+export function tick(simState, dt = 0.02) {
   if (!isActive()) { phase = 'IDLE'; return null; }
   if (currentSeq >= mission.items.length) { phase = 'DONE'; return holdLevel(); }
 
   const altAGL = simState.y - GROUND_OFFSET;
   const speed = Math.hypot(simState.vx, simState.vy, simState.vz);
+
+  // Yaw-rate washout: track the steady (low-frequency) yaw rate and subtract it,
+  // leaving only the oscillatory part for the yaw damper to act on.
+  const yawRate = simState.yawRate || 0;
+  lpYawRate += (yawRate - lpYawRate) * Math.min(1, WASHOUT_HZ * dt);
+  const washedYaw = yawRate - lpYawRate;
 
   // Gain scheduling: control-surface authority grows with dynamic pressure (∝v²).
   // Scale the inner-loop commands by (REF/v)² so the effective loop gain — and
@@ -112,10 +143,7 @@ export function tick(simState) {
   // past rotate-speed. Switch to NAV when safely airborne.
   if (altAGL < TAKEOFF_ALT_M) {
     phase = 'TAKEOFF';
-    const rollCmd = clamp(
-      (0 - simState.bankRad) * BANK_KP - simState.rollRate * ROLL_RATE_KD,
-      -ROLL_LIMIT, ROLL_LIMIT,
-    );
+    const rollCmd = rollToBank(0, simState.bankRad, simState.rollRate);
     let pitchCmd = 0;
     if (speed > ROTATE_SPEED) {
       pitchCmd = clamp(
@@ -123,7 +151,10 @@ export function tick(simState) {
         PITCH_LIMIT_DOWN, PITCH_LIMIT_UP,
       );
     }
-    return { pitch: pitchCmd * qScale, roll: rollCmd * qScale, yaw: 0, throttle: 1.0 };
+    return {
+      pitch: pitchCmd * qScale, roll: rollCmd * qScale,
+      yaw: yawCommand(rollCmd * qScale, washedYaw, simState.beta), throttle: 1.0,
+    };
   }
 
   phase = 'NAV';
@@ -144,44 +175,40 @@ export function tick(simState) {
   const dz = tgt2.z - simState.z;
   const dy = tgt2.y - simState.y;
 
-  // ----- Outer loop: heading + TECS-lite longitudinal --------------------
+  // ----- Outer loop: heading + altitude pitch with hard speed protection --
   const desiredHeading = Math.atan2(dx, -dz);
   const headingErr = wrapPi(desiredHeading - simState.headingRad);
   const desiredBank = clamp(headingErr * HEADING_TO_BANK, -MAX_BANK, MAX_BANK);
 
-  const speedErr = (TARGET_SPEED - speed) / TARGET_SPEED;   // >0 = too slow
-  const altErrN  = clamp(dy / ALT_ERR_SCALE, -1, 1);        // >0 = below target
-
-  // Pitch = energy balance + turn compensation. When slow, the −speedErr term
-  // lowers the nose to recover airspeed even if we're below target altitude.
+  // Pitch holds altitude; throttle (below) holds speed. The hard speed guard
+  // forces the nose down below SAFE_SPEED so a turn/climb can never stall.
   const turnComp = TURN_COMP * (1 / Math.cos(desiredBank) - 1);
-  const desiredPitch = clamp(
-    altErrN * PITCH_FROM_ALT - speedErr * PITCH_FROM_SPEED + turnComp,
-    -MAX_PITCH, MAX_PITCH,
-  );
+  const vsDamp = VS_DAMP * clamp(simState.vy / VS_SCALE, -1, 1); // anticipate level-off
+  let desiredPitch = clamp(dy * ALT_TO_PITCH + turnComp - vsDamp, -MAX_PITCH, MAX_PITCH);
+  if (speed < SAFE_SPEED) {
+    desiredPitch = Math.min(desiredPitch, (speed - SAFE_SPEED) * SPEED_PROT_GAIN);
+  }
 
-  // ----- Inner loop: roll & pitch (PD) -----------------------------------
-  const bankErr  = desiredBank  - simState.bankRad;
+  // ----- Inner loop: rate-limited roll + pitch PD ------------------------
   const pitchErr = desiredPitch - simState.pitchRad;
-
-  const rollCmd  = clamp(
-    bankErr * BANK_KP - simState.rollRate * ROLL_RATE_KD,
-    -ROLL_LIMIT, ROLL_LIMIT,
-  );
+  const rollCmd  = rollToBank(desiredBank, simState.bankRad, simState.rollRate);
   const pitchCmd = clamp(
     pitchErr * PITCH_KP - simState.pitchRate * PITCH_RATE_KD,
     PITCH_LIMIT_DOWN, PITCH_LIMIT_UP,
   );
 
-  // ----- Throttle: total-energy demand -----------------------------------
-  // Add power when low OR slow (total energy); the pitch loop above handles how
-  // the energy is split between climb and acceleration.
+  // ----- Throttle: hold airspeed (strong) + climb feedforward ------------
+  // A strong speed term ramps power up the moment a turn or climb bleeds speed,
+  // so airspeed is held at target and the pitch loop never has to stall to climb.
   const throttleCmd = clamp(
-    THR_TRIM + altErrN * THR_FROM_ALT + speedErr * THR_FROM_SPEED,
-    0.2, 1.0,
+    THR_TRIM + (TARGET_SPEED - speed) * THR_SPEED_GAIN + Math.max(0, dy) * THR_CLIMB_FF,
+    THR_FLOOR, 1.0,
   );
 
-  return { pitch: pitchCmd * qScale, roll: rollCmd * qScale, yaw: 0, throttle: throttleCmd };
+  return {
+    pitch: pitchCmd * qScale, roll: rollCmd * qScale,
+    yaw: yawCommand(rollCmd * qScale, washedYaw, simState.beta), throttle: throttleCmd,
+  };
 }
 
 function holdLevel() {

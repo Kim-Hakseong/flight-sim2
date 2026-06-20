@@ -492,15 +492,17 @@ function loop(now) {
       pitchRad: Math.asin(Math.max(-1, Math.min(1, fwdAP.y))),
       bankRad: -Math.asin(Math.max(-1, Math.min(1, rightAP.y))),
       // Body +X = right wing → ω.x = nose pitch rate. Body −Z = nose; +ω.z =
-      // LEFT roll, so right-roll rate = −ω.z.
+      // LEFT roll, so right-roll rate = −ω.z. ω.y = yaw-right rate.
       pitchRate: sim.omega.x,
       rollRate: -sim.omega.z,
+      yawRate: sim.omega.y,
+      beta: sideslipAngle(sim.velocity, fwdAP, rightAP), // for turn coordination
     };
     // Pick what the autopilot actually sees: truth, raw sensors, or fused estimate.
     const apInput = (navSource === 'truth' || !navEstimate)
       ? truthAP
       : navEstimate[navSource];
-    const apOut = autopilot.tick(apInput);
+    const apOut = autopilot.tick(apInput, dt);
     if (apOut) {
       controls.pitch = apOut.pitch;
       controls.roll = apOut.roll;
@@ -978,6 +980,8 @@ function updateNavEstimate(dt) {
   const m = measured;
   if (m.gpsX === undefined) { navEstimate = null; return; }
   const gear = aircraft.userData.gearOffset;
+  // Air-data sideslip (INS/vane) — same for both inputs; used for turn coordination.
+  const beta = sideslipAngle(sim.velocity, _sensFwd, _sensRight);
 
   // GPS position is noisy and the nav loop is slow → fuse with a Kalman filter.
   // Attitude/rates come from the IMU with tiny noise; filtering them only adds
@@ -1002,14 +1006,16 @@ function updateNavEstimate(dt) {
       vx: sim.velocity.x, vy: sim.velocity.y, vz: sim.velocity.z,
       headingRad: m.heading * DEG2RAD,
       pitchRad: m.pitch * DEG2RAD, bankRad: m.roll * DEG2RAD,
-      pitchRate: m.q * DEG2RAD, rollRate: m.p * DEG2RAD,
+      pitchRate: m.q * DEG2RAD, rollRate: m.p * DEG2RAD, yawRate: m.r * DEG2RAD,
+      beta,
     },
     measured: {
       x: m.gpsX, y: m.altitude + gear, z: m.gpsZ,
       vx: sim.velocity.x, vy: sim.velocity.y, vz: sim.velocity.z,
       headingRad: m.heading * DEG2RAD,
       pitchRad: m.pitch * DEG2RAD, bankRad: m.roll * DEG2RAD,
-      pitchRate: m.q * DEG2RAD, rollRate: m.p * DEG2RAD,
+      pitchRate: m.q * DEG2RAD, rollRate: m.p * DEG2RAD, yawRate: m.r * DEG2RAD,
+      beta,
     },
   };
 }

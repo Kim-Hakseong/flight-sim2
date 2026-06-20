@@ -24,13 +24,14 @@ export function localToWaypoint(home, xEast, zLocal, altAGL) {
 // Circuit in local meters: climb out straight ahead, right turn, downwind,
 // base turn back toward the field. Plane starts at z≈950 heading -z.
 // Straight, climbing-then-level legs ahead of the runway (plane starts z≈950
-// heading −z). The TECS-lite longitudinal autopilot (M14) flies these rock-solid;
-// coordinated turns await a lateral-dynamics fix (see PRD §M14 Out / M15).
+// heading −z). The separation-control autopilot (M14/M15) flies these rock-solid:
+// it climbs to cruise and holds altitude/airspeed precisely. Coordinated turns
+// still wallow (lateral-directional dynamics need offline pole-placement) → M16.
 const LEGS = [
-  { x: 0, z: -300,  alt: 130 }, // 1: climb-out ahead
-  { x: 0, z: -1300, alt: 150 }, // 2: continue climb to cruise
-  { x: 0, z: -2300, alt: 150 }, // 3: level cruise
-  { x: 0, z: -3300, alt: 150 }, // 4: hold heading
+  { x: 0, z: -400,  alt: 130 }, // 1: climb-out ahead
+  { x: 0, z: -1400, alt: 150 }, // 2: continue climb to cruise
+  { x: 0, z: -2400, alt: 150 }, // 3: level cruise
+  { x: 0, z: -3400, alt: 150 }, // 4: hold heading
 ];
 
 /** Build the demo circuit mission for a given home. Pure. */

@@ -556,3 +556,19 @@
 **Notes**:
 - 진단 방법: 수동 'd' 롤 유지 → 즉시 발산 확인(autopilot 무관). 오토파일럿 선회도 t36 깨끗한 순항(roll−7)에서 t37 −102 발산.
 - TECS-lite는 종방향만; 횡방향 미해결이라 turns는 여전히 불가. PRD §19 Out에 명시.
+
+## 2026-06-20 23:30 — M15: 횡방향 안정화 + 분리형 종방향 제어
+
+**Status**: GREEN (순항/종방향·발산제거) · 협조선회 수렴은 M16
+**Files changed**: src/physics.js, src/autopilot.js, src/main.js, src/missions.js, PRD.md
+**Tests**: 164 passing, 0 failing · 콘솔 0 · 전 브라우저 회귀 PASS · 순항 정밀(152m)
+**Decisions**:
+- 비행모델 횡방향 미계수 재균형: Cl_da 0.12→0.10, Cl_p −0.45→−0.55, Cn_r −0.18→−0.75(요댐핑 대폭↑가 더치롤 발산 차단의 핵심).
+- 오토파일럿 횡방향: 워시아웃 요댐퍼(정상 선회레이트 통과, 진동만 감쇠) + β 협조 러더 + ARI + 레이트제한 롤(rollToBank). yawRate/beta를 autopilot 입력에 추가, tick(simState, dt).
+- 종방향: TECS균형 → 분리형(피치=고도, 스로틀=강속도유지+하드 속도가드). 순항 정밀(152m, 오버슈트 제거; M14는 169m).
+- 직진 데모 미션 유지. 협조선회는 wallow — 블라인드 튜닝 한계, 극배치 필요(M16).
+**Next**:
+- M16: 횡-방향 선형화→극배치로 협조선회 게인 산출, 이후 circuit 복원 + sensor-in-the-loop AUTO 재도전
+**Notes**:
+- ~30회 프로브 반복으로 규명: 즉시 발산은 요댐핑 부족(Cn_r). 잔존 wallow는 협조선회 게인 미세조정(러더 과활성↔과소) 문제로 오프라인 해석이 효율적.
+- 회귀: console/fly/mission(152m)/hils/nav/telem 전부 PASS. 수동비행·HILS·FDE 무회귀.
