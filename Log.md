@@ -621,3 +621,18 @@
 **Notes**:
 - M11→M18 여정: M11 이륙 크래시 → M14-17 제어 견고화(TECS분리/협조선회) → M18 estimated 완주. 견고한 제어가 센서-in-the-loop를 가능케 함.
 - estimated 서킷: 이륙→152m→WP1(북)→우선회→WP2(동)→WP3(남)→WP4(서)→DONE, 속도 43~56·aoa 낮음·무크래시.
+
+## 2026-06-21 08:27 — M19: GPS 스푸핑 중 AUTO 항로유지 (FDE+INS)
+
+**Status**: GREEN 🎉
+**Files changed**: src/main.js, tests/spoof-route-check.mjs (new), PRD.md
+**Tests**: 174 passing, 0 failing · 콘솔 0 · spoof-route-check PASS · console/nav/mission 무회귀
+**Decisions**:
+- 지속적 GPS 거부(연속12프레임↑) 중 추정 위치를 INS 속도로 추측항법(insReckon) → GPS 단절에도 항법 유지. 거부 중 공분산 캡(P00≤4)으로 게이트를 좁게 유지 → 지속 스푸핑도 계속 배제.
+- 결과: gpsX +2000 스푸핑 98초 내내 추정=truth(≤1m), NAV DEGRADED, 오토파일럿 WP1·WP2 항로유지 비행.
+- insReckon은 kf.rejected일 때만 동작 → 정상 비행/서킷 무영향(174 테스트·회귀 PASS).
+**Next**:
+- 하강/착륙 단계, 다중 고도 circuit, 느린 드리프트 스푸핑 대응
+**Notes**:
+- 검증 과정에서 2개 실제 HILS 현상 발견·해결: (1) GPS 거부 시 추정 동결(→INS 추측항법), (2) 지속 거부 중 공분산 성장이 게이트 넓혀 스푸핑 재수용(→공분산 캡).
+- 시연: K키로 AUTO 시작 → injectFault('gpsX',{type:'bias',value:5000}) → HUD NAV DEGRADED + 항로 유지. clearFaults() 복구.

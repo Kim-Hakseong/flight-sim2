@@ -169,6 +169,7 @@ let kfX = createKF(), kfZ = createKF(), kfY = createKF();
 let navEstimate = null;                    // { estimated, measured } autopilot inputs
 let navDegraded = false;                   // FDE: GPS measurements being rejected
 let navDegradedHold = 0;                   // frames to hold the warning (hysteresis)
+let gpsRejectStreak = 0;                    // consecutive rejected frames → sustained fault
 
 if (typeof window !== 'undefined') {
   window.injectFault = (target, fault) => { hilsFaults[target] = fault || null; };
@@ -376,7 +377,7 @@ function resetAircraft() {
   sim.omega.set(0, 0, 0);
   sim.actuators.elevator = sim.actuators.aileron = sim.actuators.rudder = 0;
   kfX = createKF(sim.position.x); kfZ = createKF(sim.position.z); kfY = createKF(0);
-  navEstimate = null; measured = {}; navDegraded = false; navDegradedHold = 0;
+  navEstimate = null; measured = {}; navDegraded = false; navDegradedHold = 0; gpsRejectStreak = 0;
   sim.status = 'OK';
   sim.vsi = 0;
   sim.gForce = 1.0;
@@ -989,10 +990,29 @@ function updateNavEstimate(dt) {
   // Gated Kalman (M13 FDE): a GPS jump/spoof/dropout produces a huge innovation,
   // gets rejected, and the filter coasts on its model instead of chasing the bad
   // fix. Persistent rejection raises NAV DEGRADED.
-  kfX = kfStepGated(kfX, m.gpsX, dt, { q: 1.5, r: 2.5, gate: 16 });
-  kfZ = kfStepGated(kfZ, m.gpsZ, dt, { q: 1.5, r: 2.5, gate: 16 });
-  kfY = kfStepGated(kfY, m.altitude, dt, { q: 1.0, r: 1.0, gate: 25 });
-  if (kfX.rejected || kfZ.rejected || kfY.rejected) navDegradedHold = 90;
+  const pX = kfX.x, pZ = kfZ.x, pY = kfY.x;
+  const sx = kfStepGated(kfX, m.gpsX, dt, { q: 1.5, r: 2.5, gate: 16 });
+  const sz = kfStepGated(kfZ, m.gpsZ, dt, { q: 1.5, r: 2.5, gate: 16 });
+  const sy = kfStepGated(kfY, m.altitude, dt, { q: 1.0, r: 1.0, gate: 25 });
+
+  // A coordinated turn briefly trips the gate (the constant-velocity model curves
+  // away) — that's transient, not a fault, so the standard gated filter just coasts
+  // one step and recovers. Only SUSTAINED rejection (a real spoof/jam) engages INS
+  // dead-reckoning: integrate position on the confident INS velocity and cap the
+  // covariance so the gate stays tight and keeps rejecting the spoof. This holds
+  // the estimate on truth → the autopilot keeps its route.
+  if (sx.rejected || sz.rejected || sy.rejected) gpsRejectStreak++;
+  else gpsRejectStreak = 0;
+  const sustained = gpsRejectStreak > 12;     // ~0.2 s of continuous rejection
+  const insReckon = (kf, prevX, vel) =>
+    (sustained && kf.rejected)
+      ? { x: prevX + vel * dt, v: vel, P00: Math.min(kf.P00, 4), P01: 0, P10: 0, P11: Math.min(kf.P11, 1), rejected: true, nis: kf.nis }
+      : kf;
+  kfX = insReckon(sx, pX, sim.velocity.x);
+  kfZ = insReckon(sz, pZ, sim.velocity.z);
+  kfY = insReckon(sy, pY, sim.velocity.y);
+
+  if (sustained) navDegradedHold = 90;
   else if (navDegradedHold > 0) navDegradedHold--;
   navDegraded = navDegradedHold > 0;
 
