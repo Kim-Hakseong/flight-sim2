@@ -43,6 +43,7 @@ import {
   GRAVITY,
   STALL_AOA_RAD,
 } from './physics.js';
+import { DT_PHYS, MAX_SUBSTEPS, planSteps } from './fixedStep.js';
 
 const THREE = window.THREE;
 
@@ -330,11 +331,15 @@ const tmpAccel = new THREE.Vector3();
 let prevAccelMag = GRAVITY;
 
 let last = performance.now();
+let physAccum = 0; // unsimulated time carried between frames (fixed-step accumulator)
 
 function loop(now) {
   let dt = (now - last) / 1000;
   last = now;
-  dt = Math.min(dt, 0.05); // anti-blowup; also caps physics step
+  // Visual dt clamp (camera/effects/prop spin) for tab-refocus hitches. Physics
+  // no longer rides this dt — it advances in fixed DT_PHYS sub-steps (M7), with
+  // MAX_SUBSTEPS as its own spiral-of-death guard.
+  dt = Math.min(dt, 0.1);
 
   // Replay mode: physics is paused; pose is read from the recorder buffer.
   if (isReplaying(recorder)) {
@@ -413,10 +418,22 @@ function loop(now) {
       controls.throttle = apOut.throttle;
     }
 
-    if (vehicleType === 'drone') {
-      drone.stepDrone(sim, controls, dt, GRAVITY);
-    } else {
-      stepPhysics(dt);
+    // Deterministic fixed-step integration (M7): advance physics in fixed
+    // DT_PHYS increments regardless of render frame rate, so (state + inputs) →
+    // identical trajectory. Controls sampled above are zero-order-held across the
+    // sub-steps of this frame. See src/fixedStep.js / PRD §M7.
+    physAccum += dt;
+    const plan = planSteps(physAccum, DT_PHYS, MAX_SUBSTEPS);
+    physAccum = plan.remainder;
+    if (plan.dropped > 0.25) {
+      console.warn(`[fixedStep] shed ${plan.dropped.toFixed(2)}s of sim time (frame hitch)`);
+    }
+    for (let i = 0; i < plan.steps; i++) {
+      if (vehicleType === 'drone') {
+        drone.stepDrone(sim, controls, DT_PHYS, GRAVITY);
+      } else {
+        stepPhysics(DT_PHYS);
+      }
     }
   }
 

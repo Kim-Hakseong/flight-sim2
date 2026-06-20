@@ -396,3 +396,24 @@
 - 입문서 §4도 두 보고서로 링크 (이미 INDUSTRY 링크 있음, PEERS는 추가)
 - Auterion Virtual Skynode 재발견이 가장 큰 통찰 — 우리 모델이 새롭지 않다 (이미 상용으로 존재) 단 lock-in/접근성에서 차별화 가능
 - 한국 진영: GCS는 많지만 시뮬+GCS 결합은 비어있음 — 정확한 진입 갭
+
+## 2026-06-20 13:52 — M7: 결정론적 고정스텝 적분
+
+**Status**: GREEN
+**Files changed**: src/fixedStep.js (new), src/main.js, tests/fixedStep.test.mjs (new), tests/console-check.mjs (new), PRD.md
+**Tests**: 12 added (fixedStep), 87 passing, 0 failing · 브라우저 콘솔 에러 0 (CDP 헤드리스 검증)
+**Decisions**:
+- 물리레이트/렌더레이트 분리: 누산기(accumulator) + 고정 DT_PHYS=0.005s(200 Hz). stepPhysics는 이미 순수·결정론적이라 고정 dt 구동만으로 전체 재현성 확보 — 적분기 재작성 불필요.
+- planSteps에 fp 경계 eps(dt*1e-6) 도입: accumulated==N·dt가 정확히 N스텝 나오도록(0.005/0.005 floor 0 스톨 방지).
+- MAX_SUBSTEPS=60(≤0.3s/frame) 스파이럴-오브-데스 가드, 초과 sim-time은 shed + 0.25s 초과 시 console.warn.
+- 컨트롤(게임패드/오토파일럿/스로틀)은 프레임당 1회 샘플 → 서브스텝 간 ZOH(영차홀드, 표준).
+- 시각 dt 클램프 0.05→0.1로 상향(PRD §9와 일치): 물리는 더이상 이 dt에 의존 안 함(카메라/이펙트 전용).
+- rk4Step(순수 4차 RK) 선구현: 지금은 미사용, 향후 모멘트 기반 6-DOF용. 지수감쇠/조화진동 해석해로 정확도 검증.
+- 검증 방식: CDP(Chrome 원격 디버깅)로 헤드리스 로드 4초 구동 → 예외/console.error/Network 4xx 수집. 브릿지 오프라인(:8765)·favicon은 설계상 fail-silent라 IGNORE 필터.
+**Next**:
+- M7-follow: 입력 샘플링의 sim-time 바인딩(완전 bit-determinism record/replay)
+- #4 센서/액추에이터 모델 또는 #5 모멘트 기반 6-DOF(rk4Step 실사용)로 확장
+**Notes**:
+- Mac Mini 실기 확인: index.html 더블클릭 → 비행 정상, HUD 속도/고도 갱신, 프레임레이트 바꿔도(예: 모니터 60→120Hz) 비행 거동 동일해야 정상.
+- 헤드리스 재검증: `node tests/console-check.mjs <url> <cdpPort>` (Chrome --headless=new --enable-unsafe-swiftshader 필요).
+- physAccum는 paused/CRASH 시 누적 안 함(블록 내부에서만 += dt). replay/HITL 분기는 물리 미실행이라 영향 없음.
