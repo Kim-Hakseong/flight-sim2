@@ -68,6 +68,14 @@
     #hud-qgc.online { color: #6fff6f; border-color: #6fff6f; text-shadow: 0 0 6px #6fff6f; }
     #hud-qgc.offline { color: #ff8080; border-color: rgba(255,128,128,0.4); }
 
+    #hud-nav {
+      position: absolute; top: 52px; left: 50%; transform: translateX(-50%);
+      padding: 4px 14px; font-size: 13px; font-weight: 700; letter-spacing: 2px;
+      border: 1px solid #ff5050; background: rgba(40,0,0,0.5);
+      color: #ff5050; text-shadow: 0 0 8px #ff0000; display: none;
+    }
+    #hud-nav.show { display: block; }
+
     #hud-damage {
       position: absolute; top: 60px; right: 18px;
       width: 130px; padding: 6px 8px;
@@ -169,6 +177,7 @@
     <div id="hud-mute" class="hidden">MUTE</div>
 
     <div id="hud-qgc" class="offline">QGC OFFLINE</div>
+    <div id="hud-nav">⚠ NAV DEGRADED</div>
 
     <div id="hud-damage">
       <span class="label">INTEGRITY</span>

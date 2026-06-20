@@ -524,3 +524,19 @@
 - 데모 미션은 직진+완만 상승(WP 4개). 급선회+상승은 현 오토파일럿이 실속 → Out of M12로 명시.
 - 검증: mission-check.mjs(헤드리스 AUTO 회귀), 이륙→alt 118→WP2 도달 안정. 콘솔: window.loadDemoMission() 또는 K키, N키 중단.
 - estimated 이륙 PIO 디버깅 18회 반복으로 원인 규명: 센서 지연/노이즈가 한계안정 캐스케이드 PD를 자극. 근본 해결은 오토파일럿 재설계(M12-follow).
+
+## 2026-06-20 19:58 — M13: FDE(결함 탐지·배제) + NAV DEGRADED
+
+**Status**: GREEN
+**Files changed**: src/estimator.js, src/main.js, src/hud.js, index.html, tests/estimator.test.mjs, tests/nav-check.mjs, PRD.md
+**Tests**: 5 added (kfStepGated), 160 passing, 0 failing · 콘솔 0 · nav(FDE) 행동검증 PASS · 전 회귀 PASS
+**Decisions**:
+- kfStepGated: NIS=y²/S 카이제곱 게이트(기본 16)로 이상치 측정 배제→예측 coast, {rejected,nis} 반환. 순수.
+- GPS x/z(gate16)·기압고도(gate25) 게이팅. navDegraded는 히스테리시스(90프레임 hold)로 깜빡임 방지. navSource 무관하게 항상 GPS 감시.
+- HUD #hud-nav "⚠ NAV DEGRADED"(중앙 상단 적색). __hils.navDegraded 노출.
+- M11→M13 진화: 순진한 KF는 스푸핑에 속음 → 게이팅 KF는 탐지·배제. nav-check를 FDE 거동(추정이 truth 유지+경고)으로 갱신.
+**Next**:
+- 느린 드리프트(게이트 회피) 탐지(CUSUM), 다중 GPS/INS 융합으로 배제 후 항법 지속
+**Notes**:
+- 시연: injectFault('gpsX',{type:'bias',value:300}) 또는 {type:'frozen'} 후 HUD에 NAV DEGRADED, window.__hils.navDegraded=true. 추정 window.__hils.nav.estimated.x는 truth 유지. clearFaults()로 복구.
+- 검증: nav-check.mjs(FDE 배제+경고), hud 토글 CDP 확인(none→block).

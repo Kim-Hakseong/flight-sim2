@@ -37,7 +37,7 @@ await sleep(2500);
 const sampleExpr = `(function(){
   const h = window.__hils; if(!h||!h.nav) return null;
   const t = h.measured && h.measured._truth; if(!t) return null;
-  return { estX: h.nav.estimated.x, measX: h.nav.measured.x, truthX: t.gpsX, src: h.navSource };
+  return { estX: h.nav.estimated.x, measX: h.nav.measured.x, truthX: t.gpsX, src: h.navSource, degraded: h.navDegraded };
 })()`;
 
 const fails = [];
@@ -58,13 +58,19 @@ estErr /= n; measErr /= n;
 console.log(`nominal: mean|est-truth|=${estErr.toFixed(3)}  mean|meas-truth|=${measErr.toFixed(3)}`);
 if (measErr > 0.3 && !(estErr < measErr)) fails.push(`estimator not smoothing: est ${estErr} vs raw ${measErr}`);
 
-// --- 2. GPS spoof: bias drags the autopilot's estimate off truth ---
+// --- 2. GPS spoof: FDE (M13) detects the jump, rejects it, raises NAV DEGRADED ---
 await evalJs(`window.injectFault('gpsX', { type: 'bias', value: 200 })`);
-await sleep(4000); // GPS lag + KF settle
+await sleep(4000); // GPS lag + FDE engages
 const spoofed = await evalJs(sampleExpr);
 console.log('after GPS spoof:', spoofed);
-if (!spoofed || spoofed.estX < 100) fails.push(`spoof did not fool the estimate: estX=${spoofed && spoofed.estX} (expected ≫ truth)`);
-if (Math.abs(spoofed.truthX) > 50) fails.push(`truth unexpectedly moved: ${spoofed.truthX}`);
+if (!spoofed) fails.push('no nav sample after spoof');
+else {
+  if (!spoofed.degraded) fails.push('FDE did not raise NAV DEGRADED on the GPS spoof');
+  if (Math.abs(spoofed.estX - spoofed.truthX) > 40) {
+    fails.push(`FDE did not reject the spoof — estimate followed it: estX=${spoofed.estX} truthX=${spoofed.truthX}`);
+  }
+  if (spoofed.measX < 100) fails.push(`raw measurement should show the spoof: measX=${spoofed.measX}`);
+}
 
 await evalJs(`window.clearFaults()`);
 ws.close();
@@ -74,5 +80,5 @@ if (fails.length) {
   for (const f of fails) console.log('  - ' + f);
   process.exit(1);
 }
-console.log('nav-check: PASS — estimator smooths nominal GPS; spoof fools the autopilot nav (truth unmoved)');
+console.log('nav-check: PASS — estimator smooths nominal GPS; FDE rejects the spoof, holds truth, raises NAV DEGRADED');
 process.exit(0);

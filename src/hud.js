@@ -9,7 +9,7 @@ let overlay = null;
 export function initHud() {
   const ids = [
     'v-speed','v-alt','v-aoa','v-vsi','v-hdg','v-thr','v-g','v-pitch','v-roll',
-    'v-status','cell-status','hud-qgc','v-mode','v-wp','cell-mode','cell-wp',
+    'v-status','cell-status','hud-qgc','hud-nav','v-mode','v-wp','cell-mode','cell-wp',
     'dmg-fus','dmg-lwg','dmg-rwg','dmg-tail','dmg-eng',
     'hud-rec','hud-replay','hud-hitl','hud-pad','hud-mute',
     'hud-scenario','sc-name','sc-obj','sc-score','hud-mp','mp-count',
@@ -70,6 +70,8 @@ export function updateHud(state) {
     els['hud-qgc'].classList.toggle('online', on);
     els['hud-qgc'].classList.toggle('offline', !on);
   }
+
+  if (els['hud-nav']) els['hud-nav'].classList.toggle('show', !!state.navDegraded);
 
   if (state.damage) {
     setDmgBar(els['dmg-fus'],  state.damage.fuselage);

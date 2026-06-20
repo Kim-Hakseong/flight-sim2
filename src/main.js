@@ -51,7 +51,7 @@ import {
 import { DT_PHYS, MAX_SUBSTEPS, planSteps, rk4Step } from './fixedStep.js';
 import { stepActuator } from './actuators.js';
 import { makeRng, stepSensor } from './sensors.js';
-import { createKF, kfStep } from './estimator.js';
+import { createKF, kfStepGated } from './estimator.js';
 import { buildDemoMission } from './missions.js';
 
 const THREE = window.THREE;
@@ -168,6 +168,8 @@ let navSource = 'truth';
 const DEG2RAD = Math.PI / 180;
 let kfX = createKF(), kfZ = createKF(), kfY = createKF();
 let navEstimate = null;                    // { estimated, measured } autopilot inputs
+let navDegraded = false;                   // FDE: GPS measurements being rejected
+let navDegradedHold = 0;                   // frames to hold the warning (hysteresis)
 
 if (typeof window !== 'undefined') {
   window.injectFault = (target, fault) => { hilsFaults[target] = fault || null; };
@@ -179,6 +181,7 @@ if (typeof window !== 'undefined') {
     get faults() { return hilsFaults; },
     get navSource() { return navSource; },
     get nav() { return navEstimate; },
+    get navDegraded() { return navDegraded; },
     get auto() {
       return {
         active: autopilot.isActive(), phase: autopilot.getPhase(),
@@ -374,7 +377,7 @@ function resetAircraft() {
   sim.omega.set(0, 0, 0);
   sim.actuators.elevator = sim.actuators.aileron = sim.actuators.rudder = 0;
   kfX = createKF(sim.position.x); kfZ = createKF(sim.position.z); kfY = createKF(0);
-  navEstimate = null; measured = {};
+  navEstimate = null; measured = {}; navDegraded = false; navDegradedHold = 0;
   sim.status = 'OK';
   sim.vsi = 0;
   sim.gForce = 1.0;
@@ -980,9 +983,15 @@ function updateNavEstimate(dt) {
   // Attitude/rates come from the IMU with tiny noise; filtering them only adds
   // phase lag that destabilizes the fast inner control loop, so trust them raw
   // (an INS-trusts-attitude, GPS-filters-position split).
-  kfX = kfStep(kfX, m.gpsX, dt, { q: 1.5, r: 2.5 });
-  kfZ = kfStep(kfZ, m.gpsZ, dt, { q: 1.5, r: 2.5 });
-  kfY = kfStep(kfY, m.altitude, dt, { q: 1.0, r: 1.0 });
+  // Gated Kalman (M13 FDE): a GPS jump/spoof/dropout produces a huge innovation,
+  // gets rejected, and the filter coasts on its model instead of chasing the bad
+  // fix. Persistent rejection raises NAV DEGRADED.
+  kfX = kfStepGated(kfX, m.gpsX, dt, { q: 1.5, r: 2.5, gate: 16 });
+  kfZ = kfStepGated(kfZ, m.gpsZ, dt, { q: 1.5, r: 2.5, gate: 16 });
+  kfY = kfStepGated(kfY, m.altitude, dt, { q: 1.0, r: 1.0, gate: 25 });
+  if (kfX.rejected || kfZ.rejected || kfY.rejected) navDegradedHold = 90;
+  else if (navDegradedHold > 0) navDegradedHold--;
+  navDegraded = navDegradedHold > 0;
 
   navEstimate = {
     estimated: {
@@ -1033,6 +1042,7 @@ function pushHud() {
     rollRad: sim.euler.z,
     status: sim.status + (controls.paused ? ' · PAUSED' : ''),
     qgcOnline: isBridgeOnline(),
+    navDegraded,
     mode: apActive ? `AUTO·${apPhase}` : 'MANUAL',
     missionSeq: apActive ? apSeq : null,
     missionLen: apLen,

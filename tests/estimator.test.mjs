@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createKF, kfStep, lowpassStep } from '../src/estimator.js';
+import { createKF, kfStep, kfStepGated, lowpassStep } from '../src/estimator.js';
 import { makeRng, gaussian } from '../src/sensors.js';
 
 const closeTo = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
@@ -59,6 +59,55 @@ test('kfStep: pure — does not mutate the input state', () => {
   const s = createKF(1, 1);
   const snap = JSON.parse(JSON.stringify(s));
   kfStep(s, 5, 0.05, { q: 1, r: 1 });
+  assert.deepEqual(s, snap);
+});
+
+// ---------- kfStepGated: fault detection & exclusion (M13) ----------
+
+// Settle a gated filter on a constant truth so its covariance is small.
+function settledGated(truth, cfg, steps = 60) {
+  let s = createKF(truth, 0);
+  for (let i = 0; i < steps; i++) s = kfStepGated(s, truth, 0.05, cfg);
+  return s;
+}
+
+const GATE_CFG = { q: 0.5, r: 4, gate: 16 };
+
+test('kfStepGated: accepts a normal measurement (not rejected)', () => {
+  const s = settledGated(100, GATE_CFG);
+  const out = kfStepGated(s, 100.6, 0.05, GATE_CFG);
+  assert.equal(out.rejected, false);
+  assert.ok(Math.abs(out.x - 100) < 1, `x ${out.x}`);
+});
+
+test('kfStepGated: rejects an outlier (GPS jump) and coasts instead of following it', () => {
+  const s = settledGated(100, GATE_CFG);
+  const out = kfStepGated(s, 10000, 0.05, GATE_CFG); // huge spoof/jump
+  assert.equal(out.rejected, true);
+  assert.ok(Math.abs(out.x - 100) < 5, `estimate must NOT jump to the spoof, got ${out.x}`);
+});
+
+test('kfStepGated: NIS is small for inliers, large for outliers', () => {
+  const s = settledGated(50, GATE_CFG);
+  const good = kfStepGated(s, 50.3, 0.05, GATE_CFG);
+  const bad = kfStepGated(s, 5000, 0.05, GATE_CFG);
+  assert.ok(good.nis < GATE_CFG.gate, `inlier NIS ${good.nis}`);
+  assert.ok(bad.nis > GATE_CFG.gate, `outlier NIS ${bad.nis}`);
+});
+
+test('kfStepGated: recovers — tracks again once measurements return to normal', () => {
+  let s = settledGated(100, GATE_CFG);
+  s = kfStepGated(s, 9000, 0.05, GATE_CFG);          // outlier, rejected
+  assert.equal(s.rejected, true);
+  for (let i = 0; i < 40; i++) s = kfStepGated(s, 100, 0.05, GATE_CFG);
+  assert.equal(s.rejected, false);
+  assert.ok(Math.abs(s.x - 100) < 1, `should re-converge, got ${s.x}`);
+});
+
+test('kfStepGated: pure — does not mutate the input state', () => {
+  const s = settledGated(10, GATE_CFG);
+  const snap = JSON.parse(JSON.stringify(s));
+  kfStepGated(s, 9999, 0.05, GATE_CFG);
   assert.deepEqual(s, snap);
 });
 
