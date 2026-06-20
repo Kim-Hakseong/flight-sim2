@@ -31,30 +31,37 @@ const TAKEOFF_PITCH   = 8 * Math.PI / 180;
 const GROUND_OFFSET   = 0.8;       // matches aircraft.userData.gearOffset
 
 // Outer-loop limits.
-const MAX_BANK  = 25 * Math.PI / 180;   // 25° — a coordinated turn without turn
-                                        // compensation loses lift at high bank
-const MAX_PITCH = 8 * Math.PI / 180;    // 8° — a sustainable climb at full power;
-                                        // steeper bleeds speed into a stall
+const MAX_BANK  = 18 * Math.PI / 180;   // 18° — gentle, well-damped turns
+const MAX_PITCH = 8 * Math.PI / 180;    // 8° — a sustainable climb at full power
 // Outer-loop gains.
-const HEADING_TO_BANK = 0.9;            // gentle heading→bank (avoid bank overshoot)
-const ALT_TO_PITCH    = 0.015;          // gentle altitude tracking
+const HEADING_TO_BANK = 0.6;            // gentle heading→bank (avoid bank overshoot)
+
+// TECS-lite longitudinal: pitch holds the energy BALANCE (climb when low, but
+// trade altitude for speed when slow → stall-proof); throttle holds TOTAL energy
+// (add power when low OR slow). Turn compensation adds back-pressure for the bank.
+const ALT_ERR_SCALE   = 40;             // m — normalizes altitude error
+const PITCH_FROM_ALT  = MAX_PITCH;      // full climb pitch at ≥ALT_ERR_SCALE below
+const PITCH_FROM_SPEED = 0.40;          // rad per normalized speed error (nose down when slow)
+const TURN_COMP       = 0.55;           // back-pressure ∝ (1/cos(bank) − 1)
+const THR_TRIM        = 0.55;
+const THR_FROM_ALT    = 0.9;   // a climb gets near-full power regardless of speed
+const THR_FROM_SPEED  = 1.6;
 // Inner-loop gains. Gentle P with strong rate damping: the moment-based 6-DOF
 // (M8) responds fast, so an aggressive P overshoots into a PIO — and sensor
 // noise (sensor-in-the-loop) excites it. More D, less P keeps it critically-ish
 // damped on both truth and noisy estimated nav.
-const BANK_KP = 1.2;
-const ROLL_RATE_KD = 0.7;
+const BANK_KP = 0.9;
+const ROLL_RATE_KD = 1.5;   // strong roll damping → no bank PIO into a spiral
 const PITCH_KP = 1.0;
 const PITCH_RATE_KD = 1.0;
 
 // Limited surface authority: at cruise the elevator is very effective, so a
 // large command snaps the nose past stall before the rate term can catch it.
-const ROLL_LIMIT = 0.5;
+const ROLL_LIMIT = 0.35;
 const PITCH_LIMIT_UP = 0.22;
 const PITCH_LIMIT_DOWN = -0.22;
 
 const TARGET_SPEED = 50;     // m/s cruise
-const STALL_GUARD  = 38;     // m/s — below this the climb command is suppressed
 const REF_SPEED    = 44;     // m/s — gain-scheduling reference (gains tuned here)
 
 export function setMission(items, home) {
@@ -137,19 +144,21 @@ export function tick(simState) {
   const dz = tgt2.z - simState.z;
   const dy = tgt2.y - simState.y;
 
-  // ----- Outer loop: heading & altitude ----------------------------------
+  // ----- Outer loop: heading + TECS-lite longitudinal --------------------
   const desiredHeading = Math.atan2(dx, -dz);
-  let headingErr = wrapPi(desiredHeading - simState.headingRad);
+  const headingErr = wrapPi(desiredHeading - simState.headingRad);
   const desiredBank = clamp(headingErr * HEADING_TO_BANK, -MAX_BANK, MAX_BANK);
-  let desiredPitch = clamp(dy * ALT_TO_PITCH, -MAX_PITCH, MAX_PITCH);
 
-  // Speed/energy protection: a steep climb at low speed stalls. Bleed the
-  // commanded climb pitch toward zero as speed drops below cruise, reaching 0 at
-  // STALL_GUARD so the autopilot levels off and accelerates instead of stalling.
-  if (desiredPitch > 0 && speed < TARGET_SPEED) {
-    const f = clamp((speed - STALL_GUARD) / (TARGET_SPEED - STALL_GUARD), 0, 1);
-    desiredPitch *= f;
-  }
+  const speedErr = (TARGET_SPEED - speed) / TARGET_SPEED;   // >0 = too slow
+  const altErrN  = clamp(dy / ALT_ERR_SCALE, -1, 1);        // >0 = below target
+
+  // Pitch = energy balance + turn compensation. When slow, the −speedErr term
+  // lowers the nose to recover airspeed even if we're below target altitude.
+  const turnComp = TURN_COMP * (1 / Math.cos(desiredBank) - 1);
+  const desiredPitch = clamp(
+    altErrN * PITCH_FROM_ALT - speedErr * PITCH_FROM_SPEED + turnComp,
+    -MAX_PITCH, MAX_PITCH,
+  );
 
   // ----- Inner loop: roll & pitch (PD) -----------------------------------
   const bankErr  = desiredBank  - simState.bankRad;
@@ -164,13 +173,12 @@ export function tick(simState) {
     PITCH_LIMIT_DOWN, PITCH_LIMIT_UP,
   );
 
-  // ----- Throttle: energy management -------------------------------------
-  // Hold speed AND add power for the commanded climb. The old "cut throttle when
-  // fast" logic starved a climb of energy and stalled it; here a climb keeps the
-  // power in so airspeed doesn't decay.
+  // ----- Throttle: total-energy demand -----------------------------------
+  // Add power when low OR slow (total energy); the pitch loop above handles how
+  // the energy is split between climb and acceleration.
   const throttleCmd = clamp(
-    0.6 + (TARGET_SPEED - speed) * 0.05 + Math.max(0, desiredPitch) * 1.4,
-    0.3, 1.0,
+    THR_TRIM + altErrN * THR_FROM_ALT + speedErr * THR_FROM_SPEED,
+    0.2, 1.0,
   );
 
   return { pitch: pitchCmd * qScale, roll: rollCmd * qScale, yaw: 0, throttle: throttleCmd };

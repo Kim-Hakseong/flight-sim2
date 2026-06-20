@@ -540,3 +540,19 @@
 **Notes**:
 - 시연: injectFault('gpsX',{type:'bias',value:300}) 또는 {type:'frozen'} 후 HUD에 NAV DEGRADED, window.__hils.navDegraded=true. 추정 window.__hils.nav.estimated.x는 truth 유지. clearFaults()로 복구.
 - 검증: nav-check.mjs(FDE 배제+경고), hud 토글 CDP 확인(none→block).
+
+## 2026-06-20 22:31 — M14: TECS-lite 종방향 오토파일럿 + 횡방향 불안정 진단
+
+**Status**: GREEN (종방향) · 횡방향은 M15로 분리
+**Files changed**: src/autopilot.js, src/missions.js, tests/autopilot.test.mjs (new), PRD.md
+**Tests**: 4 added (autopilot TECS), 164 passing, 0 failing · 콘솔 0 · 직진 미션 mission-check PASS · 전 회귀 PASS
+**Decisions**:
+- TECS-lite: 피치=에너지 균형(altErrN*PITCH_FROM_ALT − speedErr*PITCH_FROM_SPEED + 선회보상), 스로틀=총에너지(THR_TRIM + altErrN*0.9 + speedErr*1.6). 저속이면 피치 내려 속도 회복 → 실속 방지. 직진 상승 견고(60→169m).
+- 롤 댐핑 강화(ROLL_RATE_KD 0.7→1.5), MAX_BANK 18°, 선회 게인 완화.
+- **핵심 진단**: 수동 롤 입력·오토파일럿 선회 모두 깨끗한 순항에서 롤 발산(−102°) → 횡방향 동역학 불안정(러더 협조/요댐퍼 부재). 선회는 비행모델 문제로 확정, M15로.
+- 데모 미션 직진+상승 유지(견고). climbing circuit은 횡방향 수정 후 복원.
+**Next**:
+- M15: 러더 협조(ARI)+요 댐퍼로 협조선회, 횡방향 안정미계수 점검(Cl_β/Cn_β/Cl_p/Cn_r 부호/크기)
+**Notes**:
+- 진단 방법: 수동 'd' 롤 유지 → 즉시 발산 확인(autopilot 무관). 오토파일럿 선회도 t36 깨끗한 순항(roll−7)에서 t37 −102 발산.
+- TECS-lite는 종방향만; 횡방향 미해결이라 turns는 여전히 불가. PRD §19 Out에 명시.
