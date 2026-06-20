@@ -605,3 +605,19 @@
 **Notes**:
 - M14~M17 ~35회 프로브 반복의 결정적 체인: M16 해석(에어프레임 안정→실속이 원인) → M17 협조 요레이트 FF(실속 제거) → 부호 수정(방향). 위치 추적(gpsX/gpsZ)으로 방향 버그 확정.
 - mission-check: 이륙→152m 순항→WP1→협조선회→WP2(x≈900)→WP3→WP4→DONE, 전구간 OK·속도 46~56·aoa 낮음.
+
+## 2026-06-21 01:01 — M18: 센서-in-the-loop AUTO 완성 (estimated 기본)
+
+**Status**: GREEN 🎉
+**Files changed**: src/main.js, src/autopilot.js, src/missions.js, tests/mission-check.mjs, PRD.md
+**Tests**: 174 passing, 0 failing · 콘솔 0 · mission-check(estimated) PASS · 전 브라우저 회귀 PASS
+**Decisions**:
+- 오토파일럿이 estimated 항법(GPS+IMU 게이팅 칼만)으로 풀 협조선회 서킷 완주(probe DONE 4/4). M11의 이륙 크래시 → 완전 비행.
+- 웨이포인트 조기 전환 ARRIVAL_HORIZ 80→160m: GPS 추정 지연에도 급선회/실속 없이 부드럽게. ARRIVAL_VERT 100.
+- GPS 센서 bandwidth 3→8(지연 완화). 직사각형 서킷(90° 우선회 4회, 1500m leg)으로 선회반경 640m와 양립.
+- **AUTO 기본 navSource 'truth'→'estimated'**: 진짜 센서-in-the-loop 기본. FDE 살아있어 임무 중 GPS 스푸핑 실시간 배제.
+**Next**:
+- 하강/착륙, GPS 스푸핑 중 AUTO 항로유지 데모(FDE+estimated), 다중 고도 circuit
+**Notes**:
+- M11→M18 여정: M11 이륙 크래시 → M14-17 제어 견고화(TECS분리/협조선회) → M18 estimated 완주. 견고한 제어가 센서-in-the-loop를 가능케 함.
+- estimated 서킷: 이륙→152m→WP1(북)→우선회→WP2(동)→WP3(남)→WP4(서)→DONE, 속도 43~56·aoa 낮음·무크래시.

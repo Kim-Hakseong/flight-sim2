@@ -145,8 +145,8 @@ const SENSOR_CFG = {
   p:        { noise: 0.15 },  // deg/s (IMU gyro)
   q:        { noise: 0.15 },
   r:        { noise: 0.15 },
-  gpsX:     { noise: 1.5, bandwidth: 3 },     // m    (GPS, slow)
-  gpsZ:     { noise: 1.5, bandwidth: 3 },
+  gpsX:     { noise: 1.5, bandwidth: 8 },     // m    (GPS, modest lag)
+  gpsZ:     { noise: 1.5, bandwidth: 8 },
 };
 // Fault registry — null = healthy. Inject from the console:
 //   injectFault('elevator', {type:'stuck'})        // actuator
@@ -156,15 +156,14 @@ const hilsFaults = {};
 const sensorRng = makeRng(0xC0FFEE);       // seeded → deterministic noise
 let measured = {};                         // latest measured (sensor) values
 
-// Sensor-in-the-loop (M11): the autopilot flies on the navigation SOURCE below.
-//   'truth'     — perfect state (default; reliable AUTO)
+// Sensor-in-the-loop (M11/M18): the autopilot flies on the navigation SOURCE below.
+//   'truth'     — perfect state (debug / comparison)
 //   'measured'  — raw sensor values fed straight to the controller
-//   'estimated' — sensors fused by a Kalman estimator
-// Default is 'truth' for dependable AUTO flight. setNavSource('estimated') opts
-// into sensor-in-the-loop: the estimator rejects random GPS noise but not bias,
-// so a spoof still fools the nav (the HILS lesson) — and the realistic sensor
-// dynamics stress the controller (robust sensor-in-the-loop AUTO is future work).
-let navSource = 'truth';
+//   'estimated' — GPS+IMU fused by a gated Kalman estimator (default)
+// Default is 'estimated': AUTO flies the full coordinated circuit on FUSED SENSOR
+// data, not truth — the genuine HILS mode. The estimator (M13 FDE) rejects GPS
+// spoofs, so injected jamming/spoofing is handled live mid-mission.
+let navSource = 'estimated';
 const DEG2RAD = Math.PI / 180;
 let kfX = createKF(), kfZ = createKF(), kfY = createKF();
 let navEstimate = null;                    // { estimated, measured } autopilot inputs

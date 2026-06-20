@@ -53,7 +53,7 @@ if (!start.active) fails.push('mission did not become active');
 if (start.len < 3) fails.push(`expected ≥3 waypoints, got ${start.len}`);
 
 let maxAlt = 0, maxSeq = 0, reachedNav = false, crashed = false, done = false, last = start;
-for (let i = 0; i < 130; i++) {      // up to ~195 s — the full coordinated circuit
+for (let i = 0; i < 150; i++) {      // up to ~225 s — the full coordinated circuit
   const s = await evalJs(stateExpr);
   last = s;
   maxAlt = Math.max(maxAlt, s.alt || 0);

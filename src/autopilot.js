@@ -19,9 +19,10 @@ let started = false;
 let currentSeq = 0;
 let phase = 'IDLE';         // IDLE | TAKEOFF | NAV | DONE
 
-const ARRIVAL_HORIZ_M = 80;        // tighter so plane really hits the waypoint
-const ARRIVAL_VERT_M  = 80;        // looser vertical so it advances even if we
-                                   // can't reach the exact altitude
+const ARRIVAL_HORIZ_M = 160;       // switch waypoints early (anticipate the turn)
+                                   // — avoids a tight over-steer at the exact WP,
+                                   // robust to the lagging GPS estimate (M18)
+const ARRIVAL_VERT_M  = 100;       // looser vertical so it advances regardless
 // Phase transition thresholds.
 const TAKEOFF_ALT_M   = 50;        // higher climb-out before turning
 const ROTATE_SPEED    = 42;        // rotate only well above stall — the moment-
