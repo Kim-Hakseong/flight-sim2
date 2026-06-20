@@ -7,7 +7,7 @@ import { buildAircraft } from './aircraft.js';
 import { createCameraRig, nextMode, updateCamera } from './camera.js';
 import { createControlState, attachKeyboard, tickThrottle } from './controls.js';
 import { initHud, updateHud } from './hud.js';
-import { maybeSend, isBridgeOnline } from './telemetry.js';
+import { maybeSend, isBridgeOnline, mergeMeasuredIntoTelemetry } from './telemetry.js';
 import * as autopilot from './autopilot.js';
 import { connect as connectMissionLink } from './missionLink.js';
 import {
@@ -979,8 +979,10 @@ function pushHud() {
     multiplayer: mp.isActive() ? { peers: mp.getPeerCount() } : null,
   });
 
-  // Send telemetry to MAVLink bridge (no-op when bridge offline).
-  maybeSend({
+  // Send telemetry to MAVLink bridge (no-op when bridge offline). We send the
+  // MEASURED (sensor) state, not truth — so GPS jam/bias/freeze and other sensor
+  // faults injected via window.injectFault show up live in QGroundControl (M10).
+  const truthTelemetry = {
     x: sim.position.x,
     y: sim.position.y,
     z: sim.position.z,
@@ -996,7 +998,8 @@ function pushHud() {
     throttle01: controls.throttle,
     vsi: sim.vsi,
     missionSeq: apActive ? apSeq : -1,
-  }, performance.now());
+  };
+  maybeSend(mergeMeasuredIntoTelemetry(truthTelemetry, measured), performance.now());
 }
 
 // Loop is driven by renderer.setAnimationLoop so WebXR sessions tick on the

@@ -471,3 +471,19 @@
 - 콘솔 시연: injectFault('elevator',{type:'stuck'}) / injectFault('altitude',{type:'bias',value:50}) / injectFault('gpsX',{type:'frozen'}) / clearFaults(). 확인: window.__hils.measured vs window.__hils.measured._truth.
 - 헤드리스 재현: node tests/hils-check.mjs <url> <port>.
 - 센서 rng는 프레임당 진행 → 기계 간 frame-count 결정론 아님(M7 caveat 동일). 단 physics 미영향이라 물리 재현성은 보존.
+
+## 2026-06-20 18:25 — M10: measured 텔레메트리 → QGC GPS 재밍 시연
+
+**Status**: GREEN
+**Files changed**: src/telemetry.js, src/main.js, tests/telemetry.test.mjs (new), tests/telem-check.mjs (new), PRD.md
+**Tests**: 7 added (telemetry merge), 141 passing, 0 failing · 콘솔 에러 0 · 텔레메트리 GPS재밍 검증 PASS
+**Decisions**:
+- mergeMeasuredIntoTelemetry(truth, measured) 순수 함수: 센서 채널(gpsX/gpsZ→x/z, altitude, airspeed→speed, roll/pitch deg→rad, heading)을 truth에 덮어씀. measured 없으면 truth 그대로(fail-safe).
+- 브릿지 매핑(t.x→lon, t.z→lat, t.altitude→alt) 불변 → measured 위치 전송만으로 GPS 결함이 QGC 지도에 반영.
+- velocity/vsi/yawRad/throttle은 truth 유지(센서 미모델). 텔레메트리는 fail-silent 그대로.
+**Next**:
+- 전용 재밍/스푸핑 결함(드리프트·다중경로) + HUD "GPS DEGRADED", 또는 센서-in-the-loop(칼만)
+**Notes**:
+- 검증: tests/telem-check.mjs — 캡처서버가 브릿지 역할, CDP가 window.TELEMETRY_URL을 캡처서버로 돌림(addScriptToEvaluateOnNewDocument). 결과: baseline x≈0, injectFault('gpsX',{bias:1000}) 후 전송 x≈999.8.
+- 실제 QGC 시연: `npm run bridge` 기동 → QGC 연결 → 브라우저 콘솔에서 injectFault('gpsX',{type:'bias',value:5000}) → 지도에서 기체가 점프. frozen=위치 고정, dropout=원점 튐.
+- 헤드리스 재현: node tests/telem-check.mjs <url> <port>.

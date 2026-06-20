@@ -11,6 +11,34 @@
 //      module loads (e.g. for a remote bridge on another machine).
 
 const BRIDGE_PORT_DEFAULT = 8765;
+const DEG2RAD = Math.PI / 180;
+
+/**
+ * Merge measured (sensor) values into a truth telemetry payload so the GCS sees
+ * what the avionics see — making sensor faults (GPS jam/bias/freeze, baro/air-
+ * data errors) visible in QGroundControl. Pure: inputs are not mutated.
+ *
+ * The bridge maps t.x→lon, t.z→lat, t.altitude→alt, so the GPS sensor channels
+ * (gpsX/gpsZ) and baro (altitude) drive the position the GCS plots.
+ *
+ * @param {object} truth     the true-state payload
+ * @param {object|null} measured  sensor readings (gpsX/gpsZ/altitude/airspeed/
+ *                            roll/pitch/heading in m, m/s, deg). Falsy/empty → truth.
+ * @returns {object} payload with sensor-backed fields substituted
+ */
+export function mergeMeasuredIntoTelemetry(truth, measured) {
+  if (!measured || measured.gpsX === undefined) return { ...truth };
+  return {
+    ...truth,
+    x: measured.gpsX,
+    z: measured.gpsZ,
+    altitude: measured.altitude,
+    speed: measured.airspeed,
+    rollRad: measured.roll * DEG2RAD,
+    pitchRad: measured.pitch * DEG2RAD,
+    headingDeg: measured.heading,
+  };
+}
 
 function resolveEndpoint() {
   if (typeof window !== 'undefined' && window.TELEMETRY_URL) {
