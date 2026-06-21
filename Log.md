@@ -756,3 +756,20 @@
 **Notes**:
 - 비행 캡처: `FLY=22 CAM=cockpit node tests/shot.mjs <url> <port> out.png '' [mobile]` (실시간 RAF 렌더, __advance는 렌더 정지하므로 미사용).
 - HUD는 표시 전용 → 물리/착륙 수치 불변(91m).
+
+## 2026-06-22 01:52 — M27: 그래픽 업그레이드 (ACES 톤매핑 + IBL 환경맵 + UnrealBloom)
+
+**Status**: GREEN (필름릭 파이프라인·블룸 렌더 확인, 헤드리스 회귀 PASS)
+**Files changed**: src/main.js(렌더러/컴포저/환경맵), index.html(포스트프로세싱 스크립트)
+**Tests**: 188 통과, 콘솔 0, landing-wind-det 5+2.5 PASS(불변 91m), 외부/체이스/애프터버너 스크린샷 확인
+**Decisions**:
+- 렌더러: **ACES 필름릭 톤매핑 + sRGB 출력 + 노출 1.15** → 평평하던 색이 시네마틱하게.
+- **IBL 환경맵(PMREM)**: 하늘/지평선/지면 그라디언트 구를 프리필터해 scene.environment 설정 → PBR 금속(제트 동체·노즐)·캐노피 유리가 실제 반사를 받음(M24 PBR 머티리얼이 비로소 살아남).
+- **포스트프로세싱(UnrealBloom)**: EffectComposer + RenderPass + UnrealBloomPass(strength 0.35·radius 0.4·**threshold 0.92** — 태양/애프터버너/항법등만 발광, 밝은 씬 전체 헤이즈 방지). r128 examples/js를 unpkg에서 로드(동일 버전), 미로드 시 직접 렌더로 graceful fallback.
+- **인코딩 버그 수정**: 컴포저 경로에서 전체 화면이 워시아웃 → RT는 LINEAR이므로 renderer.outputEncoding=Linear로 렌더(톤매핑은 머티리얼서 적용)하고 마지막에 **GammaCorrectionShader**로 sRGB 변환. fallback 경로는 sRGB 유지.
+- renderScene() 단일 진입점으로 3곳 렌더 호출 통합(컴포저/직접).
+**Next**:
+- (후속) 그림자맵(항공기 주변 타이트 프러스텀), 더 디테일한 메시/텍스처, 구름.
+**Notes**:
+- "언리얼급"은 저폴리 Three.js 한계상 완전 동일은 불가하나, 톤매핑+IBL+블룸으로 체감 품질 대폭 상승. 물리/HUD 불변(착륙 91m).
+- 외부 의존성(unpkg 포스트프로세싱)은 미로드 시 자동 폴백 — 라이브 배포서 로드 확인 필요.

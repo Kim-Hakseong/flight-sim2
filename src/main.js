@@ -65,6 +65,12 @@ const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight, false);
+// Filmic colour pipeline (M27): ACES tonemapping + sRGB output gives the
+// cinematic, "Unreal-grade" look instead of flat washed colours. Lights below
+// are re-balanced for this. Exposure trims overall brightness.
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
 
 // WebXR: enable XR rendering pipeline. A small button in the lower right of
 // the page requests an immersive-vr session when clicked.
@@ -99,16 +105,88 @@ if (typeof navigator !== 'undefined' && navigator.xr) {
 const scene = new THREE.Scene();
 const colliders = createColliders();
 buildWorld(scene, colliders);
+
+// Image-based lighting (M27): prefilter a sky/ground gradient into an environment
+// map so the PBR materials (jet metal, canopy glass) pick up real reflections —
+// the difference between flat plastic and a metallic airframe. Generated once.
+(function setupEnvironment() {
+  try {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    const envScene = new THREE.Scene();
+    // big sphere, vertical gradient (sky → horizon → ground), seen from inside
+    const geo = new THREE.SphereGeometry(50, 32, 16);
+    const cols = new Float32Array(geo.attributes.position.count * 3);
+    const sky = new THREE.Color(0x2a55a8), horiz = new THREE.Color(0xc7d6e6), grnd = new THREE.Color(0x3a4a40);
+    for (let i = 0; i < geo.attributes.position.count; i++) {
+      const ny = geo.attributes.position.getY(i) / 50; // -1..1
+      const c = ny > 0 ? horiz.clone().lerp(sky, Math.min(1, ny * 1.4))
+                       : horiz.clone().lerp(grnd, Math.min(1, -ny * 1.6));
+      cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    const envMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide }));
+    envScene.add(envMesh);
+    const envTex = pmrem.fromScene(envScene, 0.04).texture;
+    scene.environment = envTex;
+    geo.dispose(); envMesh.material.dispose(); pmrem.dispose();
+  } catch (e) {
+    console.warn('[env] PMREM environment unavailable:', e && e.message);
+  }
+})();
+
 const effects = createEffects(scene);
 
 const camera = new THREE.PerspectiveCamera(
   65, window.innerWidth / window.innerHeight, 0.1, 20000,
 );
 
+// Post-processing composer (M27): UnrealBloom adds the glow that sells the
+// "Unreal-grade" look — afterburner, sun glare, nav lights, bright HUD. Falls
+// back to a plain render if the example scripts didn't load (offline/headless).
+let composer = null, bloomPass = null;
+(function setupComposer() {
+  if (!THREE.EffectComposer || !THREE.RenderPass || !THREE.UnrealBloomPass) {
+    console.warn('[gfx] post-processing unavailable — using direct render');
+    return;
+  }
+  try {
+    composer = new THREE.EffectComposer(renderer);
+    composer.addPass(new THREE.RenderPass(scene, camera));
+    bloomPass = new THREE.UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.35,  // strength — subtle
+      0.4,   // radius
+      0.92,  // threshold — only the SUN / afterburner / nav lights bloom, not the
+             // bright scene (otherwise the whole frame hazes over)
+    );
+    composer.addPass(bloomPass);
+    // The composer's render targets are LINEAR, so render the scene linear (tone-
+    // mapping is still applied in the materials) and convert to sRGB in a final
+    // gamma pass. Without this the whole frame washes out (double/!sRGB encoding).
+    renderer.outputEncoding = THREE.LinearEncoding;
+    if (THREE.GammaCorrectionShader) {
+      composer.addPass(new THREE.ShaderPass(THREE.GammaCorrectionShader));
+    }
+    composer.setSize(window.innerWidth, window.innerHeight);
+    composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  } catch (e) {
+    console.warn('[gfx] composer setup failed:', e && e.message);
+    composer = null;
+  }
+})();
+
+// Single render entry — composer when available, else direct.
+function renderScene() {
+  if (composer) composer.render();
+  else renderer.render(scene, camera);
+}
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight, false);
+  if (composer) composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 // ---------- Aircraft + sim state ----------
@@ -657,7 +735,7 @@ function loop(now) {
     tickEffects(effects, dt);
     updateCamera(camera, getActiveVehicleMesh(), camRig, dt);
     pushHud();
-    renderer.render(scene, camera);
+    renderScene();
     
     return;
   }
@@ -675,7 +753,7 @@ function loop(now) {
     tickEffects(effects, dt);
     updateCamera(camera, getActiveVehicleMesh(), camRig, dt);
     pushHud();
-    renderer.render(scene, camera);
+    renderScene();
     
     return;
   }
@@ -771,7 +849,7 @@ function loop(now) {
     recordSnapshot(recorder, takeSnapshot());
   }
 
-  renderer.render(scene, camera);
+  renderScene();
   
 }
 
