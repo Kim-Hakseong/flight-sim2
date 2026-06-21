@@ -804,3 +804,17 @@
 - M30: 그림자맵(항공기/활주로 주변). M31: 디테일 메시/텍스처·구름.
 **Notes**:
 - 로고 경로 etc/image001.png는 리포 루트 기준(깃허브 페이지 동일).
+
+## 2026-06-22 02:24 — M30: 그림자맵 (항공기→활주로/지면)
+
+**Status**: GREEN (항공기 그림자 렌더 확인, 착륙 불변 PASS)
+**Files changed**: src/main.js(렌더러 shadowMap+팔로우), src/world.js(태양 그림자 카메라+캐스터/리시버)
+**Tests**: 콘솔 0, landing-wind-det 5+2.5 PASS(불변 91m), 활주로/이륙 그림자 스크린샷 확인
+**Decisions**:
+- renderer.shadowMap PCFSoft 활성. 거대 월드(20000)라 전체 섀도우는 저해상도 → **태양 직교 섀도우 프러스텀을 타이트(±180m)** 하게 잡고 **매 프레임 항공기 위치로 재중심**(방향 고정, target/position을 기체 따라 이동) → 근처 그림자만 선명하게.
+- 캐스터/리시버: 항공기 메시 전체 cast+receive(enableShadows, 모델 교체 시도 적용), 지면/활주로/숄더 receive, 빌딩/산 cast+receive.
+- updateSunShadow를 renderScene에 통합(모든 렌더 경로 일관).
+**Next**:
+- M31: 디테일 메시/텍스처 + 구름.
+**Notes**:
+- 그림자는 표시 전용 → 물리/착륙 불변. 모바일 성능 우려 시 후속 토글 가능.

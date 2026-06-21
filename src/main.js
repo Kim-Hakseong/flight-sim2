@@ -71,6 +71,11 @@ renderer.setSize(window.innerWidth, window.innerHeight, false);
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
+// Shadows (M30): soft shadow maps. The sun's shadow frustum is tight and follows
+// the aircraft (set each frame) so shadows are crisp where they matter despite the
+// huge world.
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 // WebXR: enable XR rendering pipeline. A small button in the lower right of
 // the page requests an immersive-vr session when clicked.
@@ -104,7 +109,8 @@ if (typeof navigator !== 'undefined' && navigator.xr) {
 
 const scene = new THREE.Scene();
 const colliders = createColliders();
-buildWorld(scene, colliders);
+const world = buildWorld(scene, colliders);
+const sunLight = world.sun;
 
 // Image-based lighting (M27): prefilter a sky/ground gradient into an environment
 // map so the PBR materials (jet metal, canopy glass) pick up real reflections —
@@ -176,8 +182,20 @@ let composer = null, bloomPass = null;
   }
 })();
 
+// Re-centre the sun's tight shadow frustum on the aircraft so shadows stay crisp.
+const _sunFollow = new THREE.Vector3();
+function updateSunShadow() {
+  if (!sunLight || !sunLight.userData.dir) return;
+  const p = getActiveVehicleMesh().position;
+  sunLight.target.position.set(p.x, 0, p.z);
+  _sunFollow.copy(sunLight.userData.dir).multiplyScalar(500);
+  sunLight.position.set(p.x + _sunFollow.x, _sunFollow.y, p.z + _sunFollow.z);
+  sunLight.target.updateMatrixWorld();
+}
+
 // Single render entry — composer when available, else direct.
 function renderScene() {
+  updateSunShadow();
   if (composer) composer.render();
   else renderer.render(scene, camera);
 }
@@ -193,6 +211,7 @@ window.addEventListener('resize', () => {
 
 let aircraft = buildAircraft(DEFAULT_MODEL);
 let aircraftModel = DEFAULT_MODEL;
+enableShadows(aircraft);
 scene.add(aircraft);
 
 // Swap the aircraft 3D model at runtime (model picker / window.setAircraftModel).
@@ -204,12 +223,17 @@ function disposeObject(obj) {
     if (c.material) (Array.isArray(c.material) ? c.material : [c.material]).forEach((m) => m.dispose());
   });
 }
+// Mark every mesh of the aircraft as a shadow caster + receiver (self-shadowing).
+function enableShadows(obj) {
+  obj.traverse((c) => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+}
 function setAircraftModel(key) {
   if (!AIRCRAFT_MODELS[key] || key === aircraftModel) return false;
   scene.remove(aircraft);
   disposeObject(aircraft);
   aircraft = buildAircraft(key);
   aircraftModel = key;
+  enableShadows(aircraft);
   scene.add(aircraft);
   if (typeof resetAircraft === 'function') resetAircraft();
   console.log(`[aircraft] model → ${key} (${AIRCRAFT_MODELS[key].label})`);

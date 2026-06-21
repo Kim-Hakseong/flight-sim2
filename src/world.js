@@ -105,7 +105,17 @@ export function buildWorld(scene, colliders) {
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff4d6, 1.05);
   sun.position.copy(sunDir).multiplyScalar(2000);
+  // Shadow map (M30): a tight orthographic frustum that main.js re-centres on the
+  // aircraft each frame, so shadows stay crisp without covering the whole world.
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.6;
+  const sc = sun.shadow.camera;
+  sc.near = 1; sc.far = 1200; sc.left = -180; sc.right = 180; sc.top = 180; sc.bottom = -180;
+  sun.userData.dir = sunDir.clone();   // fixed light direction (main.js follows with it)
   scene.add(sun);
+  scene.add(sun.target);
   const fill = new THREE.AmbientLight(0x223344, 0.25);
   scene.add(fill);
 
@@ -175,6 +185,7 @@ function buildGround(scene) {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const ground = new THREE.Mesh(geom, mat);
   ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
   scene.add(ground);
 }
 
@@ -186,6 +197,7 @@ function buildRunway(scene) {
   );
   shoulder.rotation.x = -Math.PI / 2;
   shoulder.position.set(0, 0.04, 0);
+  shoulder.receiveShadow = true;
   scene.add(shoulder);
 
   const runway = new THREE.Mesh(
@@ -194,6 +206,7 @@ function buildRunway(scene) {
   );
   runway.rotation.x = -Math.PI / 2;
   runway.position.set(0, 0.05, 0);
+  runway.receiveShadow = true;
   scene.add(runway);
 
   // Centerline dashes.
@@ -253,6 +266,7 @@ function buildBuildings(scene, colliders, count) {
     const x = side * (CORRIDOR_HALF_W + 60 + rnd() * 1100);
     const z = -RUNWAY_LENGTH / 2 + rnd() * RUNWAY_LENGTH * 1.5;
     m.position.set(x, h / 2, z);
+    m.castShadow = true; m.receiveShadow = true;
     scene.add(m);
 
     // Optional rooftop block (HVAC) on tall buildings.
@@ -295,6 +309,7 @@ function buildMountains(scene, colliders, count) {
     } while (inApproachCorridor(px, pz, r) && tries < 8);
     if (inApproachCorridor(px, pz, r)) continue;   // never place a peak on the glidepath
     m.position.set(px, h / 2 - 5, pz);
+    m.castShadow = true; m.receiveShadow = true;
     scene.add(m);
 
     // Snowcap on the tallest peaks.
