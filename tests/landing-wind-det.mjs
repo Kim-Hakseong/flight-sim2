@@ -82,12 +82,11 @@ if (!landed) fails.push(`did not complete the landing (final phase ${last && las
 if (minAlt > 3) fails.push(`never descended to the ground (minAlt=${minAlt})`);
 if (landed && last.spd > 40) fails.push(`did not slow on rollout (spd=${last.spd})`);
 if (gustSeen < 0.5) fails.push(`wind/gust was not active (gustSeen=${gustSeen.toFixed(1)})`);
-// The aircraft must complete the landing in the crosswind+gust and stay within the
-// obstacle-free approach corridor. Centreline PRECISION on short final is limited by a
-// roll-overshoot tracking mode (documented in PRD §28 as future work), so this bounds
-// "lands in the corridor", not "on the numbers".
-if (finalAbsX > 350) fails.push(`drifted out of the approach corridor on short final (finalAbsX=${finalAbsX.toFixed(1)} m)`);
-if (maxAbsX > 480) fails.push(`excessive capture excursion (maxAbsX=${maxAbsX.toFixed(1)} m)`);
+// The aircraft must complete the landing in the crosswind+gust and track the runway
+// centreline on short final. The M23 yaw damper removed the old roll-overshoot limit
+// cycle, so short-final tracking is now ~90-100 m (was ±150-320 m).
+if (finalAbsX > 140) fails.push(`not tracking the centreline on short final (finalAbsX=${finalAbsX.toFixed(1)} m)`);
+if (maxAbsX > 170) fails.push(`excessive lateral excursion (maxAbsX=${maxAbsX.toFixed(1)} m)`);
 
 if (fails.length) {
   console.log(`landing-wind-det: FAIL (${fails.length})`);

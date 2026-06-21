@@ -55,9 +55,10 @@ const XTE_TO_HEADING  = 0.006;          // rad of intercept per metre off centre
                                         // the cleared corridor across the wind envelope.
 const XTE_RATE_DAMP   = 0.05;           // rad per (m/s) of closing rate — lead term that
                                         // rolls out early so the capture settles
-const XTE_INT_GAIN    = 0;              // rad per (m·s) — integral on the localiser. Off:
-                                        // it built up and overshot the bank-limited turn
-                                        // (made lighter winds worse), so P+D only for now.
+const XTE_INT_GAIN    = 0;              // rad per (m·s) — integral OFF. With the M23 yaw damper
+                                        // the lateral is stable and tracks to ~90 m; an integral
+                                        // on top only added a slow overshoot (the residual is a
+                                        // short-final/de-crab transient, not steady droop), so P+D.
 const XTE_INT_CLAMP   = 0.35;           // rad — anti-windup cap on the integral term
 const MAX_INTERCEPT   = 30 * Math.PI / 180;  // cap the intercept/crab angle
 
@@ -103,12 +104,20 @@ const PITCH_LIMIT_DOWN = -0.22;
 // at the (small) command, load stays low, airspeed is kept, and the turn never
 // stalls. The airframe's own Cn_r damps the dutch-roll oscillation.
 const G          = 9.81;
-const YAW_RATE_KP = 2.0; // rudder per (rad/s) coordinated-yaw-rate error
+const YAW_FF_KP   = 1.6; // rudder per (rad/s) coordinated-turn feedforward (r_coord)
+const YAW_DAMP_KP = 4.5; // rudder per (rad/s) yaw-RATE damping (oppose the rate error to
+                         // r_coord). This is the real yaw damper — it adds the damping the
+                         // divergent Dutch roll lacks at low approach speed. Scheduled by
+                         // qScale so it's strong when slow (weak aero Cn_r·q̄) and backed off
+                         // at cruise where it would otherwise rudder-PIO. (M23)
 const ARI         = 0.2; // aileron→rudder feedforward (anticipate adverse yaw on roll-in)
 const YAW_LIMIT   = 0.7;
-const yawCommand = (rollCmd, bankRad, yawRate, speed) => {
+const yawCommand = (rollCmd, bankRad, yawRate, speed, qScale = 1) => {
   const rCoord = G * Math.tan(clamp(bankRad, -1.2, 1.2)) / Math.max(speed, 20);
-  return clamp(YAW_RATE_KP * (rCoord - (yawRate || 0)) + ARI * rollCmd, -YAW_LIMIT, YAW_LIMIT);
+  const rateErr = rCoord - (yawRate || 0);
+  return clamp(
+    YAW_FF_KP * rCoord + YAW_DAMP_KP * qScale * rateErr + ARI * rollCmd,
+    -YAW_LIMIT, YAW_LIMIT);
 };
 
 const TARGET_SPEED = 50;     // m/s cruise
@@ -204,7 +213,7 @@ export function tick(simState, dt = 0.02) {
     }
     return {
       pitch: pitchCmd * qScale, roll: rollCmd * qScale,
-      yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed), throttle: 1.0,
+      yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed, qScale), throttle: 1.0,
     };
   }
 
@@ -265,7 +274,7 @@ export function tick(simState, dt = 0.02) {
 
   return {
     pitch: pitchCmd * qScale, roll: rollCmd * qScale,
-    yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed), throttle: throttleCmd,
+    yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed, qScale), throttle: throttleCmd,
   };
 }
 
@@ -374,7 +383,7 @@ function landControl(simState, landWp, speed, altAGL, qScale, dt = 0.02) {
   const approachFlap = altAGL < APPROACH_FLAP_ALT ? 1 : 0.5;
   return {
     pitch: pitchCmd * qScale, roll: rollCmd * qScale,
-    yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed),
+    yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed, qScale),
     throttle: throttleCmd, flaps: approachFlap, spoilers: 0,
   };
 }

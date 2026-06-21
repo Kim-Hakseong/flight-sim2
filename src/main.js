@@ -216,6 +216,11 @@ if (typeof window !== 'undefined') {
         aoa: +(angleOfAttack(air, f, r === r ? u : u) * D).toFixed(1),
         pitch: +(Math.asin(Math.max(-1, Math.min(1, f.y))) * D).toFixed(1),
         bank: +(-Math.asin(Math.max(-1, Math.min(1, r.y))) * D).toFixed(1),
+        beta: +(sideslipAngle(air, f, r) * D).toFixed(1),
+        ail: +sim.actuators.aileron.toFixed(2),
+        rud: +sim.actuators.rudder.toFixed(2),
+        rollrate: +(-sim.omega.z * D).toFixed(1),
+        yawrate: +(sim.omega.y * D).toFixed(1),
         thr: +controls.throttle.toFixed(2),
         flaps: +(sim.flaps || 0).toFixed(1),
       };
@@ -489,7 +494,10 @@ function stepSimAndControl(dt) {
     pitchRate: sim.omega.x,
     rollRate: -sim.omega.z,
     yawRate: sim.omega.y,
-    beta: sideslipAngle(sim.velocity, fwdAP, rightAP), // for turn coordination
+    // AIR-relative sideslip (velocity − wind): in a crosswind the ground-relative
+    // slip includes the standing crab, so coordinating on it would fight the crab.
+    // The aerodynamics see this air-relative slip, so the yaw damper must too.
+    beta: sideslipAngle(_airVel.copy(sim.velocity).sub(currentWind), fwdAP, rightAP),
   };
   // Pick what the autopilot actually sees: truth, raw sensors, or fused estimate.
   const apInput = (navSource === 'truth' || !navEstimate)
