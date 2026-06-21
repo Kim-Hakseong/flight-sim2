@@ -703,3 +703,22 @@
 **Notes**:
 - 핵심 교훈: 발산 모드 진단엔 계측이 결정적이었음(beta 노출 전엔 "실속"으로 오인). 사이드슬립 피드백 ≠ 요 댐퍼 — 후자만 Dutch-roll에 댐핑 추가.
 - 검증: `node tests/landing-wind-det.mjs <url> <port> truth 5 2.5` (4·5·6 m/s 모두 PASS).
+
+## 2026-06-22 01:20 — M24: 군용 항공기 모델 + 기체 선택 UI
+
+**Status**: GREEN (F-16 기본, 헤드리스 렌더·비행·착륙 검증)
+**Files changed**: src/aircraft.js(대폭 확장), src/ui.js(new), src/main.js, src/autopilot.js, tests/shot.mjs(new 스크린샷 하니스)
+**Tests**: 188 통과, 콘솔 0, fly-check PASS(F-16), landing-wind-det 5+2.5 PASS(F-16, 중심선 91m=Cessna와 동일), F-16/Hornet 렌더 스크린샷 확인
+**Decisions**:
+- 모델 라이브러리화: aircraft.js를 빌더 레지스트리로 재구성 — buildF16(기본)/buildHornet(쌍수직미익)/buildLightPlane(기존 경비행기). 공통 contract(gearOffset/prop/parts/anchors/afterburner) 유지.
+- 머티리얼 Lambert→**MeshStandardMaterial(PBR)**: 군용 무광 도장(낮은 metalness·높은 roughness). 기존 광원(hemi+directional+ambient)으로 정상 렌더. 환경맵·블룸은 M27.
+- F-16: 뾰족 레이돔, 복부 흡입구, 버블 캐노피, 크롭델타 윙(ExtrudeGeometry)+윙팁 미사일, 단일 스윕 수직미익+스태빌레이터+벤트럴핀, 애프터버너 노즐+글로우콘. Hornet: LERX, 측면 흡입구, 쌍수직미익, 트윈 노즐.
+- 런타임 교체: window.setAircraftModel + 화면 좌상단 **모델 피커 UI**(ui.js, 시안 글래스칵핏 스타일, 모바일 반응형). 메시 dispose 후 재빌드·재배치·리셋.
+- 애프터버너: 제트는 prop 대신 throttle>55%에서 글로우콘 발광(flicker).
+- **기체별 gearOffset 차이**(제트 1.1 vs 경비행기 0.8) 대응: 오토파일럿 GROUND_OFFSET 하드코딩 제거 → simState.groundOffset로 런타임 주입(착륙 플레어·AGL 일관). 비행 동역학(AIRCRAFT 상수)은 모델 무관 동일.
+**Next**:
+- M25: 입장 시 조작 설명 팝업 + 모바일 터치 컨트롤(가상 조이스틱+스로틀 슬라이더+버튼).
+- M26: 군용 글래스칵핏 HUD 대개편(레퍼런스 이미지 기반). M27: PBR/블룸/톤매핑/대기 셰이더.
+**Notes**:
+- 비행 동역학은 동일하므로 착륙 수치(91m)가 Cessna와 정확히 일치 — 모델은 시각 스킨, 물리는 공유.
+- 수동 검증: `node tests/shot.mjs <url> <port> out.png <modelKey>` 로 기체 스크린샷.

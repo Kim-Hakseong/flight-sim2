@@ -29,7 +29,8 @@ const ROTATE_SPEED    = 42;        // rotate only well above stall — the momen
                                    // based 6-DOF (M8) needs real flying speed or
                                    // it mushes back onto the runway after liftoff
 const TAKEOFF_PITCH   = 8 * Math.PI / 180;
-const GROUND_OFFSET   = 0.8;       // matches aircraft.userData.gearOffset
+const GROUND_OFFSET   = 0.8;       // default gear height; overridden per-model via
+                                   // simState.groundOffset (jets sit higher than the trainer)
 
 // Outer-loop limits.
 const MAX_BANK  = 25 * Math.PI / 180;   // 25° — coordinated, so sustainable; tight
@@ -178,7 +179,8 @@ export function tick(simState, dt = 0.02) {
   if (!isActive()) { phase = 'IDLE'; return null; }
   if (currentSeq >= mission.items.length) { phase = 'DONE'; return holdLevel(); }
 
-  const altAGL = simState.y - GROUND_OFFSET;
+  const groundOffset = simState.groundOffset || GROUND_OFFSET;
+  const altAGL = simState.y - groundOffset;
   const speed = Math.hypot(simState.vx, simState.vy, simState.vz);
 
   // Gain scheduling: control-surface authority grows with dynamic pressure (∝v²).
@@ -344,7 +346,7 @@ function landControl(simState, landWp, speed, altAGL, qScale, dt = 0.02) {
   // commands a CLIMB (which, with reduced power, would stall): it holds level
   // until the descending slope reaches it, then follows it down. Capture from above.
   const glideAGL = Math.min(distToTD * Math.tan(GLIDESLOPE), APPROACH_ALT, altAGL);
-  const dy = (glideAGL + GROUND_OFFSET) - simState.y;    // target − current altitude
+  const dy = (glideAGL + (simState.groundOffset || GROUND_OFFSET)) - simState.y; // target − current alt
 
   // ----- ROLLOUT: on the ground — full flaps + SPOILERS to brake aerodynamically
   // (spoilers dump lift onto the wheels and add drag), idle power, then DONE.

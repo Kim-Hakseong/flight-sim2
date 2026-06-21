@@ -3,7 +3,8 @@
 // Body frame: +X right wing, +Y top, -Z nose.
 
 import { buildWorld, RUNWAY_START_Z } from './world.js';
-import { buildAircraft } from './aircraft.js';
+import { buildAircraft, AIRCRAFT_MODELS, DEFAULT_MODEL } from './aircraft.js';
+import { initModelPicker } from './ui.js';
 import { createCameraRig, nextMode, updateCamera } from './camera.js';
 import { createControlState, attachKeyboard, tickThrottle } from './controls.js';
 import { initHud, updateHud } from './hud.js';
@@ -112,8 +113,47 @@ window.addEventListener('resize', () => {
 
 // ---------- Aircraft + sim state ----------
 
-const aircraft = buildAircraft();
+let aircraft = buildAircraft(DEFAULT_MODEL);
+let aircraftModel = DEFAULT_MODEL;
 scene.add(aircraft);
+
+// Swap the aircraft 3D model at runtime (model picker / window.setAircraftModel).
+// Disposes the old meshes, rebuilds, re-adds, and resets to the runway so the new
+// jet starts cleanly. The sim physics are model-agnostic (mass/aero unchanged here).
+function disposeObject(obj) {
+  obj.traverse((c) => {
+    if (c.geometry) c.geometry.dispose();
+    if (c.material) (Array.isArray(c.material) ? c.material : [c.material]).forEach((m) => m.dispose());
+  });
+}
+function setAircraftModel(key) {
+  if (!AIRCRAFT_MODELS[key] || key === aircraftModel) return false;
+  scene.remove(aircraft);
+  disposeObject(aircraft);
+  aircraft = buildAircraft(key);
+  aircraftModel = key;
+  scene.add(aircraft);
+  if (typeof resetAircraft === 'function') resetAircraft();
+  console.log(`[aircraft] model → ${key} (${AIRCRAFT_MODELS[key].label})`);
+  return true;
+}
+let modelPicker = null;
+if (typeof window !== 'undefined') {
+  window.setAircraftModel = (key) => { const ok = setAircraftModel(key); if (ok && modelPicker) modelPicker.refresh(); return ok; };
+  window.listAircraftModels = () => Object.entries(AIRCRAFT_MODELS)
+    .map(([k, v]) => ({ key: k, label: v.label, role: v.role, jet: v.jet }));
+  window.__aircraftModel = () => aircraftModel;
+  // Build the on-screen model picker once the DOM is ready.
+  const buildPicker = () => {
+    modelPicker = initModelPicker(
+      window.listAircraftModels(),
+      () => aircraftModel,
+      (key) => window.setAircraftModel(key),
+    );
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', buildPicker);
+  else buildPicker();
+}
 
 // Cessna-class params.
 const AIRCRAFT = {
@@ -288,6 +328,10 @@ let strobeT = 0;
 
 const controls = createControlState();
 const camRig = createCameraRig();
+if (typeof window !== 'undefined') {
+  window.__camMode = (m) => { if (m) camRig.mode = m; return camRig.mode; };
+  window.__aircraftMesh = () => aircraft;
+}
 
 controls.onReset = () => resetAircraft();
 controls.onCameraToggle = () => nextMode(camRig);
@@ -498,6 +542,7 @@ function stepSimAndControl(dt) {
     // slip includes the standing crab, so coordinating on it would fight the crab.
     // The aerodynamics see this air-relative slip, so the yaw damper must too.
     beta: sideslipAngle(_airVel.copy(sim.velocity).sub(currentWind), fwdAP, rightAP),
+    groundOffset: aircraft.userData.gearOffset,   // gear height (varies by model)
   };
   // Pick what the autopilot actually sees: truth, raw sensors, or fused estimate.
   const apInput = (navSource === 'truth' || !navEstimate)
@@ -641,6 +686,16 @@ function loop(now) {
   if (vehicleType === 'plane' && aircraft.userData.prop) {
     const eng = sim.damage.engine;
     aircraft.userData.prop.rotation.z += dt * (eng <= 0.05 ? 0 : (10 + controls.throttle * 60) * eng);
+  }
+  // Jet afterburner: the exhaust cone(s) glow with throttle (visible above ~70%).
+  if (vehicleType === 'plane' && !aircraft.userData.prop) {
+    const ab = aircraft.userData.afterburners || (aircraft.userData.afterburner ? [aircraft.userData.afterburner] : []);
+    const glow = sim.damage.engine > 0.05 ? Math.max(0, (controls.throttle - 0.55) / 0.45) : 0;
+    const flicker = 0.85 + 0.15 * Math.sin(strobeT * 40);
+    for (const cone of ab) {
+      cone.material.opacity = glow * 0.75 * flicker;
+      cone.scale.setScalar(0.7 + glow * 0.6);
+    }
   }
   if (vehicleType === 'drone' && droneMesh) {
     drone.spinDroneProps(droneMesh, dt, controls.throttle);
