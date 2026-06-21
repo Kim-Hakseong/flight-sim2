@@ -3,6 +3,7 @@
 // Body frame: +X right wing, +Y top, -Z nose.
 
 import { buildWorld, RUNWAY_START_Z } from './world.js';
+import { buildClouds, driftClouds } from './clouds.js';
 import { buildAircraft, AIRCRAFT_MODELS, DEFAULT_MODEL } from './aircraft.js';
 import { initModelPicker, initIntro, initTouchControls, isTouchDevice } from './ui.js';
 import { createCameraRig, nextMode, updateCamera } from './camera.js';
@@ -111,6 +112,7 @@ const scene = new THREE.Scene();
 const colliders = createColliders();
 const world = buildWorld(scene, colliders);
 const sunLight = world.sun;
+const cloudField = buildClouds(scene);
 
 // Image-based lighting (M27): prefilter a sky/ground gradient into an environment
 // map so the PBR materials (jet metal, canopy glass) pick up real reflections —
@@ -801,6 +803,7 @@ function loop(now) {
 
   // Tick AI traffic regardless of vehicle / pause state — gives the world life.
   tickTraffic(aiList, dt);
+  driftClouds(cloudField, dt);
 
   // Scenario tick (if active) advances objectives + scores.
   scenario.tickScenario({

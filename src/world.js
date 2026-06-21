@@ -127,6 +127,29 @@ export function buildWorld(scene, colliders) {
   return { sun };
 }
 
+// Tileable grayscale value-noise for ground detail (modulates the vertex colour).
+function groundDetailTexture() {
+  const N = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = N;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(N, N);
+  for (let i = 0; i < N * N; i++) {
+    // mottled noise centred near white so it only lightly darkens the terrain
+    const n = 200 + Math.floor(rnd() * 55);
+    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = n;
+    img.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  // soften
+  ctx.globalAlpha = 0.5; ctx.filter = 'blur(1px)'; ctx.drawImage(c, 0, 0); ctx.filter = 'none';
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(80, 80);
+  t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+
 function buildGround(scene) {
   // Multi-octave fractal noise + altitude-banded vertex colors.
   const seg = 140;
@@ -182,7 +205,10 @@ function buildGround(scene) {
   geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geom.computeVertexNormals();
 
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  // A subtle procedural detail texture (canvas value-noise) breaks up the flat
+  // vertex-coloured terrain so it reads as ground rather than a solid sheet (M31).
+  const detail = groundDetailTexture();
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: detail });
   const ground = new THREE.Mesh(geom, mat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
