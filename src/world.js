@@ -6,8 +6,25 @@
 // can run aircraft-vs-world checks every frame without scanning the scene.
 
 import { addBox, addCone } from './collision.js';
+import { makeRng } from './sensors.js';
 
 const THREE = window.THREE;
+
+// Seeded RNG for world generation (M22): the building/mountain field must be
+// IDENTICAL every load so the simulation is fully deterministic — otherwise a
+// random obstacle layout makes flight tests (e.g. crosswind autoland) collide
+// differently each run. Same project rule as the sensor PRNG ("no Math.random").
+const rnd = makeRng(0x57A71C);
+
+// Keep a clear approach corridor along the extended runway centreline (x≈0) so the
+// autoland glidepath — which runs out past the runway to the touchdown point near
+// z≈-4000 — is never blocked by a building or mountain. Airports clear the
+// approach surface for exactly this reason.
+const CORRIDOR_HALF_W = 550;   // m either side of the centreline
+const CORRIDOR_Z_MAX  = 1100;  // clear all obstacles on the approach side (z below this)
+function inApproachCorridor(x, z, pad = 0) {
+  return Math.abs(x) < CORRIDOR_HALF_W + pad && z < CORRIDOR_Z_MAX;
+}
 
 export const RUNWAY_LENGTH = 2000;
 export const RUNWAY_WIDTH = 60;
@@ -222,23 +239,25 @@ function buildBuildings(scene, colliders, count) {
 
   for (let i = 0; i < count; i++) {
     // Most are blocky office boxes; a few are taller/narrower towers.
-    const isTower = Math.random() < 0.25;
-    const w = isTower ? 14 + Math.random() * 12 : 18 + Math.random() * 40;
-    const d = isTower ? 14 + Math.random() * 12 : 18 + Math.random() * 40;
-    const h = isTower ? 90 + Math.random() * 180 : 22 + Math.random() * 110;
-    const color = palette[Math.floor(Math.random() * palette.length)];
+    const isTower = rnd() < 0.25;
+    const w = isTower ? 14 + rnd() * 12 : 18 + rnd() * 40;
+    const d = isTower ? 14 + rnd() * 12 : 18 + rnd() * 40;
+    const h = isTower ? 90 + rnd() * 180 : 22 + rnd() * 110;
+    const color = palette[Math.floor(rnd() * palette.length)];
     const m = new THREE.Mesh(cubeGeom, new THREE.MeshLambertMaterial({ color }));
     m.scale.set(w, h, d);
 
-    const side = Math.random() < 0.5 ? -1 : 1;
-    const x = side * (RUNWAY_WIDTH / 2 + 90 + Math.random() * 1400);
-    const z = -RUNWAY_LENGTH / 2 + Math.random() * RUNWAY_LENGTH * 1.5;
+    const side = rnd() < 0.5 ? -1 : 1;
+    // Offset from the centreline starts beyond the approach corridor so buildings
+    // never sit under the glidepath (the aircraft tracks ±~300 m of centreline).
+    const x = side * (CORRIDOR_HALF_W + 60 + rnd() * 1100);
+    const z = -RUNWAY_LENGTH / 2 + rnd() * RUNWAY_LENGTH * 1.5;
     m.position.set(x, h / 2, z);
     scene.add(m);
 
     // Optional rooftop block (HVAC) on tall buildings.
     if (h > 80) {
-      const rw = w * 0.4, rd = d * 0.4, rh = 4 + Math.random() * 4;
+      const rw = w * 0.4, rd = d * 0.4, rh = 4 + rnd() * 4;
       const r = new THREE.Mesh(cubeGeom, new THREE.MeshLambertMaterial({ color: 0x444444 }));
       r.scale.set(rw, rh, rd);
       r.position.set(x, h + rh / 2, z);
@@ -258,15 +277,23 @@ function buildMountains(scene, colliders, count) {
   const matSnow = new THREE.MeshLambertMaterial({ color: 0xeaeaea });
 
   for (let i = 0; i < count; i++) {
-    const r = 250 + Math.random() * 500;
-    const h = 500 + Math.random() * 900;
+    const r = 250 + rnd() * 500;
+    const h = 500 + rnd() * 900;
     const m = new THREE.Mesh(baseGeom, matRock);
     m.scale.set(r, h, r);
 
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 2800 + Math.random() * 4000;
-    const px = Math.cos(angle) * dist;
-    const pz = Math.sin(angle) * dist;
+    // Re-roll the position until it clears the approach corridor (bounded, so the
+    // seeded RNG stays deterministic); give up after a few tries → skip this peak
+    // rather than block the glidepath.
+    let px, pz, tries = 0;
+    do {
+      const angle = rnd() * Math.PI * 2;
+      const dist = 2800 + rnd() * 4000;
+      px = Math.cos(angle) * dist;
+      pz = Math.sin(angle) * dist;
+      tries++;
+    } while (inApproachCorridor(px, pz, r) && tries < 8);
+    if (inApproachCorridor(px, pz, r)) continue;   // never place a peak on the glidepath
     m.position.set(px, h / 2 - 5, pz);
     scene.add(m);
 

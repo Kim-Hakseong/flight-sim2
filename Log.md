@@ -668,3 +668,21 @@
 **Notes**:
 - 진단: 착륙 플랩은 양력보다 항력. 양력 과다 시 진입 풍선·강하불가. estimated는 기압 노이즈에 민감 → 센서 정밀화로 해결.
 - 결과: firm landing(55 m/s) → 부드러운 슬로우 착륙(접근 37·접지 23·스포일러 제동). truth+estimated 둘 다.
+
+## 2026-06-21 23:40 — M22: 바람/돌풍 중 착륙 (air-relative aero + 결정론적 검증 인프라)
+
+**Status**: GREEN (바람·돌풍 중 자동착륙 완주, 무크래시) · 활주로 중심선 정밀도는 후속(PRD §28)
+**Files changed**: src/wind.js(new), src/main.js, src/autopilot.js, src/world.js, tests/wind.test.mjs(new), tests/landing-wind-det.mjs(new), tests/landing-wind-check.mjs(new), tests/wind-diag.mjs(new), PRD.md
+**Tests**: 8 added(wind: windStep 5 + shearFactor 3), 188 passing, 0 failing · 콘솔 0 · 결정론적 크로스윈드 착륙 4·5·6 m/s + 돌풍 PASS(완주·코리도어 내) · 무풍 회귀 PASS(중심선 접지)
+**Decisions**:
+- 공기상대속도 공기역학: stepPhysics 전 공력항(받음각·사이드슬립·양력·항력·측력)을 sim.velocity가 아닌 (velocity − wind)로 계산. 무풍이면 항등 → 기존 동작 불변.
+- 바람 모델 wind.js: 정상풍 + 1차 Gauss–Markov(OU) 돌풍(seeded → 결정론적, 유계). 경계층 시어 shearFactor: 지면 ≈0 → 고도서 만개(타이어 횡력 미모델 → 지상활주 무교란, 접근은 실제 크로스윈드, 접지 직전 약화). 수직 돌풍 VERT=0.15(받음각 실속 스파이크 억제).
+- 오토파일럿 착륙 개선: 크로스트랙(로컬라이저) PD 유도(중심선 추종, 정상 크로스윈드→크랩), 글라이드슬로프를 along-track 거리 기준(횡오프셋이 거리 부풀려 강하불가→선회 방지), 점진 플랩(접근 0.5/단거리 1.0 → 항력 절감으로 에너지 유지), turnMargin을 LANDING_SAFE 기준(접근 중 뱅크 권한 확보), 접근 뱅크 22° 제한.
+- 결정론적 검증 인프라(별도 가치): world.js 시드 RNG(빌딩·산 고정 배치) + 접근 코리도어(±550m) 장애물 제거 + window.__advance(고정 dt 무렌더 스텝) + __resetForTest. → 브라우저 RAF 가변 dt로 매 비행이 달라지던 문제 해소, A==B 재현 확인.
+**Next**:
+- 활주로 중심선 정밀 접지: 접근 중 롤 오버슈트(지령 22°→실제 50°, 사이드슬립·다이히드럴 발산) 한계 사이클 → 롤 댐핑/조정 제어법 보강 필요(PRD §28).
+- estimated nav 크로스윈드 착륙, 자동 디크랩, GPS 스푸핑 중 크로스윈드 착륙.
+**Notes**:
+- 핵심 진단: "실속처럼 보인 이탈"의 다수는 항공역학 실속이 아니라 코스 이탈 후 빌딩/산 충돌(reflect-and-bleed)이었음. 시드 월드 + 코리도어 정리로 무풍 완벽 착륙 복원, 바람 착륙도 완주.
+- 결정론화가 전환점: RAF 가변 dt + 랜덤 월드로 같은 코드가 매번 다른 궤적 → 튜닝 불가였음. __advance + 시드 월드로 재현성 확보 후 비로소 원인 규명.
+- 검증 명령(수동): `node tests/landing-wind-det.mjs <url> <port> truth 5 2.5` (헤드리스 CDP). 4·5·6 m/s 크로스윈드 + 돌풍 완주.

@@ -54,6 +54,7 @@ import { stepActuator } from './actuators.js';
 import { makeRng, stepSensor } from './sensors.js';
 import { createKF, kfStepGated } from './estimator.js';
 import { buildDemoMission } from './missions.js';
+import { windStep, shearFactor } from './wind.js';
 
 const THREE = window.THREE;
 
@@ -172,10 +173,27 @@ let navDegraded = false;                   // FDE: GPS measurements being reject
 let navDegradedHold = 0;                   // frames to hold the warning (hysteresis)
 let gpsRejectStreak = 0;                    // consecutive rejected frames → sustained fault
 
+// Atmospheric wind (M22): aerodynamics use (velocity − wind). Default calm.
+//   setWind(eastMps, northMps, gustMps)  e.g. setWind(8, 0, 4) = 8 m/s crosswind + gusts
+let windSteady = { x: 0, y: 0, z: 0 };     // world: +x east, −z north
+let windGust = { x: 0, y: 0, z: 0 };
+let windIntensity = 0;                      // gust RMS (m/s)
+const WIND_SEED = 0x5EED;
+let windRng = makeRng(WIND_SEED);
+const currentWind = new THREE.Vector3();    // total wind this frame
+
 if (typeof window !== 'undefined') {
   window.injectFault = (target, fault) => { hilsFaults[target] = fault || null; };
   window.clearFaults = () => { for (const k of Object.keys(hilsFaults)) delete hilsFaults[k]; };
   window.setNavSource = (s) => { if (['truth', 'measured', 'estimated'].includes(s)) navSource = s; };
+  // Wind: east (m/s, +=from west), north (m/s, +=from south), gust RMS (m/s).
+  // Reseed the gust RNG so the gust sequence is reproducible from each call (the
+  // deterministic test relies on this).
+  window.setWind = (east = 0, north = 0, gust = 0) => {
+    windSteady = { x: east, y: 0, z: -north }; windIntensity = Math.max(0, gust);
+    windGust = { x: 0, y: 0, z: 0 }; windRng = makeRng(WIND_SEED);
+  };
+  window.__wind = { get vector() { return { x: currentWind.x, y: currentWind.y, z: currentWind.z }; }, get intensity() { return windIntensity; } };
   window.__hils = {
     get measured() { return measured; },
     get actuators() { return sim.actuators; },
@@ -183,6 +201,25 @@ if (typeof window !== 'undefined') {
     get navSource() { return navSource; },
     get nav() { return navEstimate; },
     get navDegraded() { return navDegraded; },
+    get pos() { return { x: sim.position.x, y: sim.position.y, z: sim.position.z }; },
+    get vel() { return { x: sim.velocity.x, y: sim.velocity.y, z: sim.velocity.z, spd: sim.velocity.length() }; },
+    get status() { return sim.status; },
+    get wind() { return { x: currentWind.x, y: currentWind.y, z: currentWind.z }; },
+    get diag() {
+      const f = tmpForward.set(0, 0, -1).applyQuaternion(sim.orientation);
+      const u = tmpUp.set(0, 1, 0).applyQuaternion(sim.orientation);
+      const r = tmpRight.set(1, 0, 0).applyQuaternion(sim.orientation);
+      const air = _airVel.copy(sim.velocity).sub(currentWind);
+      const D = 180 / Math.PI;
+      return {
+        airspd: +air.length().toFixed(1),
+        aoa: +(angleOfAttack(air, f, r === r ? u : u) * D).toFixed(1),
+        pitch: +(Math.asin(Math.max(-1, Math.min(1, f.y))) * D).toFixed(1),
+        bank: +(-Math.asin(Math.max(-1, Math.min(1, r.y))) * D).toFixed(1),
+        thr: +controls.throttle.toFixed(2),
+        flaps: +(sim.flaps || 0).toFixed(1),
+      };
+    },
     get auto() {
       return {
         active: autopilot.isActive(), phase: autopilot.getPhase(),
@@ -418,10 +455,110 @@ const tmpRight = new THREE.Vector3();
 const tmpQuat = new THREE.Quaternion();
 const tmpVec = new THREE.Vector3();
 const tmpAccel = new THREE.Vector3();
+const _airVel = new THREE.Vector3();   // air-relative velocity (velocity − wind)
 let prevAccelMag = GRAVITY;
 
 let last = performance.now();
 let physAccum = 0; // unsimulated time carried between frames (fixed-step accumulator)
+let manualStep = false; // when true, the RAF loop stops stepping physics — a headless
+                        // test drives the sim deterministically via window.__advance
+
+// One deterministic simulation step: sense → estimate → autopilot → wind → fixed
+// physics sub-steps. Factored out of loop() so a headless test can drive it with a
+// constant dt (window.__advance) for a fully reproducible, render-free run — the
+// browser's variable RAF dt otherwise makes each flight diverge (M22).
+function stepSimAndControl(dt) {
+  // Sense → estimate → control (M11). Update the sensor model and the nav
+  // estimate first, so the autopilot flies on the selected navSource.
+  updateSensors(dt);
+  updateNavEstimate(dt);
+
+  // Truth attitude is computed directly from the orientation so the bank/pitch
+  // sign convention is unambiguous:
+  //   bank > 0 when the right wing is down; pitch > 0 when the nose is up.
+  const fwdAP = tmpForward.set(0, 0, -1).applyQuaternion(sim.orientation);
+  const rightAP = tmpRight.set(1, 0, 0).applyQuaternion(sim.orientation);
+  const truthAP = {
+    x: sim.position.x, y: sim.position.y, z: sim.position.z,
+    vx: sim.velocity.x, vy: sim.velocity.y, vz: sim.velocity.z,
+    headingRad: Math.atan2(fwdAP.x, -fwdAP.z),
+    pitchRad: Math.asin(Math.max(-1, Math.min(1, fwdAP.y))),
+    bankRad: -Math.asin(Math.max(-1, Math.min(1, rightAP.y))),
+    // Body +X = right wing → ω.x = nose pitch rate. Body −Z = nose; +ω.z =
+    // LEFT roll, so right-roll rate = −ω.z. ω.y = yaw-right rate.
+    pitchRate: sim.omega.x,
+    rollRate: -sim.omega.z,
+    yawRate: sim.omega.y,
+    beta: sideslipAngle(sim.velocity, fwdAP, rightAP), // for turn coordination
+  };
+  // Pick what the autopilot actually sees: truth, raw sensors, or fused estimate.
+  const apInput = (navSource === 'truth' || !navEstimate)
+    ? truthAP
+    : navEstimate[navSource];
+  const apOut = autopilot.tick(apInput, dt);
+  if (apOut) {
+    controls.pitch = apOut.pitch;
+    controls.roll = apOut.roll;
+    controls.yaw = apOut.yaw;
+    controls.throttle = apOut.throttle;
+    sim.flaps = apOut.flaps || 0;
+    sim.spoilers = apOut.spoilers || 0;
+  }
+
+  // Wind (M22): evolve the gust once per frame; stepPhysics reads currentWind.
+  // A boundary-layer shear scales the wind to ≈0 on the runway (so the ground
+  // roll is undisturbed — we model no tyre cornering force) and full strength
+  // aloft, so the approach flies a real crosswind that eases toward touchdown.
+  const ws = windStep(windSteady, windGust, dt, windRng, windIntensity);
+  windGust = ws.gust;
+  const shear = shearFactor(sim.position.y - aircraft.userData.gearOffset);
+  currentWind.set(ws.wind.x * shear, ws.wind.y * shear, ws.wind.z * shear);
+
+  // Deterministic fixed-step integration (M7): advance physics in fixed DT_PHYS
+  // increments regardless of render frame rate, so (state + inputs) → identical
+  // trajectory. Controls sampled above are zero-order-held across the sub-steps.
+  physAccum += dt;
+  const plan = planSteps(physAccum, DT_PHYS, MAX_SUBSTEPS);
+  physAccum = plan.remainder;
+  if (plan.dropped > 0.25) {
+    console.warn(`[fixedStep] shed ${plan.dropped.toFixed(2)}s of sim time (frame hitch)`);
+  }
+  for (let i = 0; i < plan.steps; i++) {
+    if (vehicleType === 'drone') {
+      drone.stepDrone(sim, controls, DT_PHYS, GRAVITY);
+    } else {
+      stepPhysics(DT_PHYS);
+    }
+  }
+}
+
+// Headless deterministic driver: advance `seconds` of sim time at a constant
+// frame dt with no rendering. Reproducible across runs (unlike the RAF loop), so
+// autopilot/wind behaviour can be unit-verified. Returns a small status summary.
+if (typeof window !== 'undefined') {
+  // Freeze the RAF loop and reset to a known initial state so a deterministic test
+  // run starts from identical conditions every time. Call before setWind/loadDemoMission.
+  window.__resetForTest = () => {
+    manualStep = true;
+    physAccum = 0;
+    windGust = { x: 0, y: 0, z: 0 };
+    windRng = makeRng(WIND_SEED);
+    resetAircraft();
+    return { ok: true };
+  };
+  window.__advance = (seconds, dtFrame = 1 / 60) => {
+    manualStep = true;          // ensure the RAF loop never double-steps the sim
+    const n = Math.max(0, Math.round(seconds / dtFrame));
+    let done = 0;
+    for (let i = 0; i < n; i++) {
+      if (sim.status === 'CRASH') break;
+      stepSimAndControl(dtFrame);
+      done++;
+    }
+    syncMesh();
+    return { simTime: done * dtFrame, status: sim.status };
+  };
+}
 
 function loop(now) {
   let dt = (now - last) / 1000;
@@ -464,7 +601,7 @@ function loop(now) {
     return;
   }
 
-  if (!controls.paused && sim.status !== 'CRASH') {
+  if (!controls.paused && sim.status !== 'CRASH' && !manualStep) {
     tickThrottle(controls, dt);
 
     // Gamepad: per-axis override (only the axes the user is actually pushing,
@@ -477,64 +614,9 @@ function loop(now) {
       if (pad.throttle !== null)      controls.throttle = pad.throttle;
     }
 
-    // Sense → estimate → control (M11). Update the sensor model and the nav
-    // estimate first, so the autopilot flies on the selected navSource.
-    updateSensors(dt);
-    updateNavEstimate(dt);
-
-    // Autopilot override (AUTO mission). Computed before stepPhysics so the
-    // physics layer just sees control inputs as usual.
-    //
-    // Truth attitude is computed directly from the orientation so the bank/pitch
-    // sign convention is unambiguous:
-    //   bank   > 0 when the right wing is down (matches CLAUDE.md §3)
-    //   pitch  > 0 when the nose is up
-    const fwdAP = tmpForward.set(0, 0, -1).applyQuaternion(sim.orientation);
-    const rightAP = tmpRight.set(1, 0, 0).applyQuaternion(sim.orientation);
-    const truthAP = {
-      x: sim.position.x, y: sim.position.y, z: sim.position.z,
-      vx: sim.velocity.x, vy: sim.velocity.y, vz: sim.velocity.z,
-      headingRad: Math.atan2(fwdAP.x, -fwdAP.z),
-      pitchRad: Math.asin(Math.max(-1, Math.min(1, fwdAP.y))),
-      bankRad: -Math.asin(Math.max(-1, Math.min(1, rightAP.y))),
-      // Body +X = right wing → ω.x = nose pitch rate. Body −Z = nose; +ω.z =
-      // LEFT roll, so right-roll rate = −ω.z. ω.y = yaw-right rate.
-      pitchRate: sim.omega.x,
-      rollRate: -sim.omega.z,
-      yawRate: sim.omega.y,
-      beta: sideslipAngle(sim.velocity, fwdAP, rightAP), // for turn coordination
-    };
-    // Pick what the autopilot actually sees: truth, raw sensors, or fused estimate.
-    const apInput = (navSource === 'truth' || !navEstimate)
-      ? truthAP
-      : navEstimate[navSource];
-    const apOut = autopilot.tick(apInput, dt);
-    if (apOut) {
-      controls.pitch = apOut.pitch;
-      controls.roll = apOut.roll;
-      controls.yaw = apOut.yaw;
-      controls.throttle = apOut.throttle;
-      sim.flaps = apOut.flaps || 0;
-      sim.spoilers = apOut.spoilers || 0;
-    }
-
-    // Deterministic fixed-step integration (M7): advance physics in fixed
-    // DT_PHYS increments regardless of render frame rate, so (state + inputs) →
-    // identical trajectory. Controls sampled above are zero-order-held across the
-    // sub-steps of this frame. See src/fixedStep.js / PRD §M7.
-    physAccum += dt;
-    const plan = planSteps(physAccum, DT_PHYS, MAX_SUBSTEPS);
-    physAccum = plan.remainder;
-    if (plan.dropped > 0.25) {
-      console.warn(`[fixedStep] shed ${plan.dropped.toFixed(2)}s of sim time (frame hitch)`);
-    }
-    for (let i = 0; i < plan.steps; i++) {
-      if (vehicleType === 'drone') {
-        drone.stepDrone(sim, controls, DT_PHYS, GRAVITY);
-      } else {
-        stepPhysics(DT_PHYS);
-      }
-    }
+    // Sense → estimate → autopilot → wind → deterministic fixed-step physics.
+    // Factored into stepSimAndControl so the headless test can drive it directly.
+    stepSimAndControl(dt);
   }
 
   // Tick AI traffic regardless of vehicle / pause state — gives the world life.
@@ -707,11 +789,13 @@ function stepPhysics(dt) {
   tmpRight.set(1, 0, 0).applyQuaternion(sim.orientation);
 
   const rhoNow = airDensity(Math.max(0, sim.position.y));
-  const vRel = sim.velocity.length();
+  // Air-relative velocity (M22): aerodynamics see velocity − wind, not ground speed.
+  _airVel.copy(sim.velocity).sub(currentWind);
+  const vRel = _airVel.length();
   let aoaNow = 0, betaNow = 0;
   if (vRel > 0.5) {
-    aoaNow = angleOfAttack(sim.velocity, tmpForward, tmpUp);
-    betaNow = sideslipAngle(sim.velocity, tmpForward, tmpRight);
+    aoaNow = angleOfAttack(_airVel, tmpForward, tmpUp);
+    betaNow = sideslipAngle(_airVel, tmpForward, tmpRight);
   }
   const qbar = 0.5 * rhoNow * vRel * vRel;
   const ctrl = controlMultiplier(sim.damage); // damaged tail reduces authority
@@ -767,14 +851,15 @@ function stepPhysics(dt) {
   tmpUp.set(0, 1, 0).applyQuaternion(sim.orientation);
   tmpRight.set(1, 0, 0).applyQuaternion(sim.orientation);
 
-  // --- 4. Aerodynamic forces ---
+  // --- 4. Aerodynamic forces (air-relative: velocity − wind) ---
   const altitude = Math.max(0, sim.position.y);
   const rho = airDensity(altitude);
-  const v = sim.velocity.length();
+  _airVel.copy(sim.velocity).sub(currentWind);
+  const v = _airVel.length();
 
   let aoa = 0;
   if (v > 0.5) {
-    aoa = angleOfAttack(sim.velocity, tmpForward, tmpUp);
+    aoa = angleOfAttack(_airVel, tmpForward, tmpUp);
   }
   // Base aero, then apply high-lift devices (flaps add lift+drag, spoilers add
   // drag + dump lift) so the autopilot can fly a slow, gentle approach + brake.
@@ -787,10 +872,10 @@ function stepPhysics(dt) {
   const Lmag = liftForce({ rho, v, area: AIRCRAFT.wingArea, cl }) * totalWingMul;
   const Dmag = dragForce({ rho, v, area: AIRCRAFT.wingArea, cd });
 
-  // Lift acts perpendicular to velocity, in the plane containing body up.
+  // Lift acts perpendicular to the air-relative velocity, in the body-up plane.
   const liftDir = tmpVec.copy(tmpUp);
   if (v > 0.5) {
-    const vHat = sim.velocity.clone().multiplyScalar(1 / v);
+    const vHat = _airVel.clone().multiplyScalar(1 / v);
     const projection = vHat.clone().multiplyScalar(tmpUp.dot(vHat));
     liftDir.copy(tmpUp).sub(projection);
     if (liftDir.lengthSq() < 1e-6) liftDir.copy(tmpUp);
@@ -807,10 +892,10 @@ function stepPhysics(dt) {
     sim.omega.z += wingImbalance * v * 0.0015 * dt;
   }
 
-  // Drag acts opposite velocity.
+  // Drag acts opposite the air-relative velocity.
   const dragVec = new THREE.Vector3();
   if (v > 0.001) {
-    dragVec.copy(sim.velocity).multiplyScalar(-Dmag / v);
+    dragVec.copy(_airVel).multiplyScalar(-Dmag / v);
   }
 
   // Thrust acts along nose forward (-Z body) in world frame.
@@ -822,7 +907,7 @@ function stepPhysics(dt) {
 
   // Lateral side force from sideslip (completes 6-DOF translation): acts along
   // the body right axis, opposing the slip so turns become coordinated.
-  const betaF = (v > 0.5) ? sideslipAngle(sim.velocity, tmpForward, tmpRight) : 0;
+  const betaF = (v > 0.5) ? sideslipAngle(_airVel, tmpForward, tmpRight) : 0;
   const SY = sideForce({ qbar: 0.5 * rho * v * v, S: AIRCRAFT.wingArea, beta: betaF });
   const sideVec = tmpRight.clone().multiplyScalar(SY);
 
