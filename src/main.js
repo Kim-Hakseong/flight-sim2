@@ -230,21 +230,19 @@ if (typeof window !== 'undefined') {
       (key) => window.setAircraftModel(key),
     );
     const params = new URLSearchParams(location.search);
-    // Touch controls: auto on touch devices; ?touch=1 forces on (desktop opt-in
-    // / testing), ?touch=0 forces off.
+    // Touch controls are always created (so the 🕹 toggle works on any device); they
+    // start VISIBLE on touch devices or with ?touch=1, hidden otherwise.
     const touchParam = params.get('touch');
-    const showTouch = touchParam === '1' || (touchParam !== '0' && isTouchDevice);
-    if (showTouch) {
-      initTouchControls(controls, {
-        onCamera: () => controls.onCameraToggle(),
-        onPause: () => { controls.paused = !controls.paused; },
-        onDemo: () => window.loadDemoMission(),
-      });
-      // The on-screen joystick replaces the keyboard help text — hide it so it
-      // doesn't overlap the touch controls on a small screen.
-      const help = document.getElementById('hud-help');
-      if (help) help.style.display = 'none';
-    }
+    const startVisible = touchParam === '1' || (touchParam !== '0' && isTouchDevice);
+    // Hide the keyboard help text whenever the on-screen controls are showing.
+    const syncHelp = (v) => { const h = document.getElementById('hud-help'); if (h) h.style.display = v ? 'none' : ''; };
+    const touchUI = initTouchControls(controls, {
+      onCamera: () => controls.onCameraToggle(),
+      onPause: () => { controls.paused = !controls.paused; },
+      onDemo: () => window.loadDemoMission(),
+      onToggle: syncHelp,
+    }, startVisible);
+    window.__toggleTouch = (v) => touchUI.setVisible(v == null ? !touchUI.isVisible() : v);
     // Intro popup on entry (skip with ?intro=0 for screenshots/tests).
     if (params.get('intro') !== '0') {
       window.__intro = initIntro({

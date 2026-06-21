@@ -17,7 +17,7 @@ function injectStyles() {
   stylesInjected = true;
   const css = `
   .${NS}-picker {
-    position: fixed; top: 16px; left: 16px; z-index: 30;
+    position: fixed; top: 50px; left: 16px; z-index: 30;
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     border: 1px solid rgba(120,200,255,0.5);
     background: linear-gradient(180deg, rgba(8,18,28,0.82), rgba(6,12,20,0.82));
@@ -43,8 +43,8 @@ function injectStyles() {
   .${NS}-opt .${NS}-name { font-size: 13px; font-weight: 700; color: #eaf6ff; }
   .${NS}-opt.sel .${NS}-name { color: #9fe0ff; text-shadow: 0 0 8px rgba(120,200,255,0.7); }
   .${NS}-opt .${NS}-role { font-size: 9px; opacity: 0.6; letter-spacing: 0.5px; }
-  @media (max-width: 640px) {
-    .${NS}-picker { top: 10px; left: 10px; min-width: 150px; padding: 6px 8px; }
+  @media (max-width: 940px) {
+    .${NS}-picker { top: 38px; left: 10px; min-width: 150px; padding: 6px 8px; }
     .${NS}-opt .${NS}-name { font-size: 12px; }
   }
   `;
@@ -213,7 +213,16 @@ function injectTouchStyles() {
   const c = 'rgba(120,200,255,';
   const css = `
   .${NS}-touch { position: fixed; inset: 0; z-index: 25; pointer-events: none; touch-action: none; }
+  .${NS}-touch.${NS}-hidden { display: none; }
   .${NS}-touch .pe { pointer-events: auto; touch-action: none; }
+  .${NS}-toggle {
+    position: fixed; bottom: 14px; right: 56px; z-index: 31; height: 34px; padding: 0 12px;
+    border: 1px solid rgba(120,200,255,0.5); border-radius: 17px; background: rgba(8,18,28,0.8);
+    color: #9fe0ff; font: 700 12px ui-monospace, monospace; letter-spacing: 0.5px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px; pointer-events: auto; user-select: none;
+  }
+  .${NS}-toggle:hover { background: rgba(60,140,220,0.3); }
+  .${NS}-toggle.on { background: rgba(60,150,230,0.45); border-color: rgba(120,200,255,0.9); color: #eaf6ff; }
   .${NS}-stick {
     position: absolute; left: 22px; bottom: 26px; width: 132px; height: 132px;
     border-radius: 50%; border: 1px solid ${c}0.45);
@@ -256,7 +265,7 @@ function injectTouchStyles() {
  * @param {object} state control state (pitch/roll/yaw/throttle + on* hooks)
  * @param {{ onCamera:()=>void, onDemo:()=>void, onPause:()=>void }} hooks
  */
-export function initTouchControls(state, hooks) {
+export function initTouchControls(state, hooks, startVisible = true) {
   injectTouchStyles();
   const root = el('div', `${NS}-touch`);
 
@@ -335,5 +344,19 @@ export function initTouchControls(state, hooks) {
   root.appendChild(tbtns);
 
   document.body.appendChild(root);
-  return { root };
+
+  // Visibility + a toggle button so the on-screen controls can be turned on/off.
+  let visible = startVisible;
+  function apply() {
+    root.classList.toggle(`${NS}-hidden`, !visible);
+    if (!visible) { state.pitch = 0; state.roll = 0; state.yaw = 0; } // release axes when hidden
+  }
+  const toggleBtn = el('div', `${NS}-toggle`, '🕹 <span>조작</span>');
+  toggleBtn.title = '터치 컨트롤 켜기/끄기';
+  function setVisible(v) { visible = v; toggleBtn.classList.toggle('on', v); apply(); hooks.onToggle && hooks.onToggle(v); }
+  toggleBtn.addEventListener('click', () => setVisible(!visible));
+  document.body.appendChild(toggleBtn);
+  setVisible(startVisible);
+
+  return { root, setVisible, isVisible: () => visible };
 }

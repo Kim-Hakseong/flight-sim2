@@ -8,6 +8,14 @@
     html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
     #c { display: block; width: 100vw; height: 100vh; }
 
+    /* NXS brand logo (top-left). */
+    #brand-logo {
+      position: fixed; top: 14px; left: 16px; z-index: 32; height: 26px;
+      pointer-events: none; image-rendering: auto;
+      filter: drop-shadow(0 0 6px rgba(0,0,0,0.6));
+    }
+    @media (max-width: 940px) { #brand-logo { height: 20px; top: 10px; left: 10px; } }
+
     /* Military HUD: amber monochrome, monospace. */
     #hud {
       position: fixed; inset: 0; pointer-events: none;
@@ -140,6 +148,8 @@
 </head>
 <body>
   <canvas id="c"></canvas>
+
+  <img id="brand-logo" src="etc/image001.png" alt="NXS — New Experiment System" />
 
   <div id="hud">
     <div class="hud-tape" id="hud-speed">
