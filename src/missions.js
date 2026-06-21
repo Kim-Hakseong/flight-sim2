@@ -23,21 +23,24 @@ export function localToWaypoint(home, xEast, zLocal, altAGL) {
 
 // Circuit in local meters: climb out straight ahead, right turn, downwind,
 // base turn back toward the field. Plane starts at z≈950 heading -z.
-// A rectangular circuit flown clockwise with four ~90° right turns (plane starts
-// z≈950 heading −z = north). Legs (~1500 m) are well clear of the ~640 m turn
-// radius, so the coordinated-turn autopilot (M17) navigates it on truth AND on
-// the sensor-fused 'estimated' nav (M18).
+// A straight-in takeoff → climb → cruise → glideslope landing, all on runway
+// heading (north, −z). No turns, so the landing demo (M20) is reliable; the
+// coordinated-turn circuit is showcased separately (M17/M18). Sensor-fused
+// 'estimated' nav (M18) flies it too.
 const LEGS = [
-  { x: 0,    z: -2200, alt: 150 }, // 1: climb straight north to cruise
-  { x: 1500, z: -2200, alt: 150 }, // 2: turn right → east
-  { x: 1500, z: -700,  alt: 150 }, // 3: turn right → south
-  { x: 0,    z: -700,  alt: 150 }, // 4: turn right → west, back toward start
+  { x: 0, z: -1000, alt: 130 },            // 1: climb straight to cruise
+  { x: 0, z: -2000, alt: 150 },            // 2: cruise, line up for the approach
+  { x: 0, z: -4000, alt: 0, land: true },  // 3: straight-in glideslope → touchdown
 ];
 
-/** Build the demo circuit mission for a given home. Pure. */
+/** Build the demo circuit+landing mission for a given home. Pure. */
 export function buildDemoMission(home) {
   return {
     home,
-    items: LEGS.map((l) => localToWaypoint(home, l.x, l.z, l.alt)),
+    items: LEGS.map((l) => {
+      const wp = localToWaypoint(home, l.x, l.z, l.alt);
+      if (l.land) wp.land = true;
+      return wp;
+    }),
   };
 }

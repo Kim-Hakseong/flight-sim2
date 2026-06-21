@@ -47,9 +47,18 @@ test('buildDemoMission: returns a multi-waypoint climbing circuit', () => {
   assert.ok(m.items.length >= 3, `expected ≥3 waypoints, got ${m.items.length}`);
   for (const wp of m.items) {
     assert.ok(Number.isFinite(wp.lat) && Number.isFinite(wp.lon));
-    assert.ok(wp.alt > 0, 'climb altitude');
     assert.equal(wp.frame, 3);
+    if (!wp.land) assert.ok(wp.alt > 0, 'cruise legs climb');
   }
+});
+
+test('buildDemoMission: ends with a touchdown (land) waypoint at ground level', () => {
+  const m = buildDemoMission(HOME);
+  const last = m.items[m.items.length - 1];
+  assert.equal(last.land, true);
+  assert.equal(last.alt, 0);
+  // exactly one landing waypoint
+  assert.equal(m.items.filter((w) => w.land).length, 1);
 });
 
 test('buildDemoMission: first waypoint is ahead of the runway start (toward -z)', () => {

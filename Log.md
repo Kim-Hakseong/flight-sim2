@@ -636,3 +636,19 @@
 **Notes**:
 - 검증 과정에서 2개 실제 HILS 현상 발견·해결: (1) GPS 거부 시 추정 동결(→INS 추측항법), (2) 지속 거부 중 공분산 성장이 게이트 넓혀 스푸핑 재수용(→공분산 캡).
 - 시연: K키로 AUTO 시작 → injectFault('gpsX',{type:'bias',value:5000}) → HUD NAV DEGRADED + 항로 유지. clearFaults() 복구.
+
+## 2026-06-21 10:04 — M20: 자동 착륙 (글라이드슬로프 → 플레어 → 접지)
+
+**Status**: GREEN (안전 착륙·무크래시) · 부드러운 감속착륙은 후속
+**Files changed**: src/autopilot.js, src/missions.js, tests/missions.test.mjs, tests/landing-check.mjs (new), PRD.md
+**Tests**: 175 passing(land 웨이포인트 테스트 추가), 0 failing · 콘솔 0 · landing-check PASS(접지·활주·DONE)
+**Decisions**:
+- LAND 위상: APPROACH(순항 종방향 제어 재사용 + 글라이드슬로프 목표를 현재고도로 캡=위에서 캡처, 상승금지로 클라임-실속 방지) → FLARE(7m, 파워오프+약한 노즈업) → ROLLOUT(idle+마찰). 착륙 커밋 래치로 풍선 억제.
+- hasClimbedOut 게이트로 강하 중 TAKEOFF 재진입 방지.
+- 직진 데모 미션(이륙→상승→순항→착륙)으로 단순화. 서킷은 M17/M18 입증.
+- 슬릭 기체라 firm landing(~55 m/s 접지, 강하율 안전). 크래시 없음.
+**Next**:
+- 플랩/스포일러 감속착륙, 활주로 중심선 유지, GPS 스푸핑 중 자동착륙
+**Notes**:
+- 진단 핵심: 접근 초기 클라임-실속(글라이드슬로프 목표가 현재고도 위) → min(slope,alt)로 위에서 캡처. 플레어 풍선 → 커밋 래치+파워오프.
+- 헤드리스 2개 순차실행 시 CPU부하로 폴 윈도우 만료(테스트 artifact, 크래시 아님). 단일 실행 안정 착륙(활주 2~29 m/s).

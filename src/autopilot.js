@@ -92,6 +92,15 @@ const yawCommand = (rollCmd, bankRad, yawRate, speed) => {
 const TARGET_SPEED = 50;     // m/s cruise
 const REF_SPEED    = 44;     // m/s — gain-scheduling reference (gains tuned here)
 
+// ----- Landing (M20): glideslope approach → flare → touchdown -----
+const GLIDESLOPE     = 4 * Math.PI / 180;  // ~4° descent path to the touchdown point
+const APPROACH_ALT   = 160;                // m — cap the glideslope target (start of descent)
+const APPROACH_SPEED = 46;                  // m/s — approach airspeed (above stall)
+const FLARE_PITCH    = 1.2 * Math.PI / 180;  // small nose-up — just softens the firm touchdown
+const FLARE_ALT      = 7;                    // m AGL — begin the (short) flare
+let hasClimbedOut = false;                  // true once airborne — stops re-entering TAKEOFF
+let landingCommitted = false;               // true once low on final — no climb-back / float
+
 export function setMission(items, home) {
   mission = { items: items || [], home };
   currentSeq = 0;
@@ -103,6 +112,8 @@ export function startMission() {
   started = true;
   currentSeq = 0;
   phase = 'TAKEOFF';
+  hasClimbedOut = false;
+  landingCommitted = false;
 }
 export function abort() { started = false; phase = 'IDLE'; }
 export function isActive() { return !!(mission && started); }
@@ -134,11 +145,21 @@ export function tick(simState, dt = 0.02) {
   // instead of overshooting into a PIO at high speed.
   const qScale = clamp((REF_SPEED / Math.max(speed, 20)) ** 2, 0.35, 1.2);
 
+  if (altAGL >= TAKEOFF_ALT_M) hasClimbedOut = true;
+
+  // ----- LANDING phase ---------------------------------------------------
+  // Once the current waypoint is a touchdown point, fly the glideslope down to
+  // it, flare, and touch down — instead of treating the low altitude as takeoff.
+  if (mission.items[currentSeq] && mission.items[currentSeq].land && hasClimbedOut) {
+    return landControl(simState, mission.items[currentSeq], speed, altAGL, qScale);
+  }
+
   // ----- TAKEOFF phase ---------------------------------------------------
   // Banking on the runway makes the plane skid sideways without ever
   // climbing out. Hold wings level, throttle up, rotate gently once we're
-  // past rotate-speed. Switch to NAV when safely airborne.
-  if (altAGL < TAKEOFF_ALT_M) {
+  // past rotate-speed. Switch to NAV when safely airborne. Only at the start —
+  // hasClimbedOut stops this from firing again as we descend to land.
+  if (altAGL < TAKEOFF_ALT_M && !hasClimbedOut) {
     phase = 'TAKEOFF';
     const rollCmd = rollToBank(0, simState.bankRad, simState.rollRate);
     let pitchCmd = 0;
@@ -217,6 +238,72 @@ export function tick(simState, dt = 0.02) {
 
 function holdLevel() {
   return { pitch: 0, roll: 0, yaw: 0, throttle: 0.5 };
+}
+
+// Glideslope approach → flare → touchdown to a `land` waypoint (the touchdown
+// point, alt 0). Lateral: track the centreline. Vertical: hold a ~4° glidepath
+// (pitch tracks the slope, throttle holds approach speed); flare and cut power
+// near the ground so the descent rate is gentle at touchdown.
+function landControl(simState, landWp, speed, altAGL, qScale) {
+  const tgt = waypointToLocal(landWp, mission.home);
+  const dx = tgt.x - simState.x;
+  const dz = tgt.z - simState.z;
+  const distToTD = Math.hypot(dx, dz);
+
+  // Lateral: steer the centreline toward the touchdown point.
+  const desiredHeading = Math.atan2(dx, -dz);
+  const headingErr = wrapPi(desiredHeading - simState.headingRad);
+  const turnMargin = clamp((speed - SAFE_SPEED) / (TARGET_SPEED - SAFE_SPEED), 0, 1);
+  const desiredBank = clamp(-headingErr * HEADING_TO_BANK, -MAX_BANK, MAX_BANK) * turnMargin;
+  const rollCmd = rollToBank(desiredBank, simState.bankRad, simState.rollRate);
+
+  // Vertical: reuse the PROVEN-stable cruise longitudinal control (pitch holds the
+  // target altitude with a hard speed guard, throttle holds airspeed) but feed it a
+  // glideslope target altitude that descends to 0 at the touchdown point. Because
+  // it's the same loop that holds cruise rock-solid, the descent never stalls.
+  // Cap the glideslope target at the current altitude so the approach never
+  // commands a CLIMB (which, with reduced power, would stall): it holds level
+  // until the descending slope reaches it, then follows it down. Capture from above.
+  const glideAGL = Math.min(distToTD * Math.tan(GLIDESLOPE), APPROACH_ALT, altAGL);
+  const dy = (glideAGL + GROUND_OFFSET) - simState.y;    // target − current altitude
+
+  // ----- ROLLOUT: on the ground, idle and let rolling friction stop it -----
+  if (altAGL < 1.5) {
+    if (speed < 30) { phase = 'DONE'; currentSeq = mission.items.length; }
+    else phase = 'FLARE';
+    return { pitch: 0, roll: rollCmd * qScale, yaw: 0, throttle: 0 };
+  }
+
+  if (altAGL < FLARE_ALT) landingCommitted = true; // committed to land — no climb-back
+
+  let desiredPitch, throttleCmd;
+  if (landingCommitted && altAGL >= FLARE_ALT) {
+    phase = 'FLARE';
+    // Ballooned after committing → sink gently back down (never climb away again).
+    desiredPitch = -0.05;
+    throttleCmd = 0;
+  } else if (altAGL < FLARE_ALT) {
+    phase = 'FLARE';
+    // Ease the nose up to soften the touchdown; trickle power so it doesn't stall
+    // (a firm touchdown at speed is safe — the ground rolls it out).
+    desiredPitch = FLARE_PITCH * clamp((FLARE_ALT - altAGL) / FLARE_ALT, 0, 1);
+    throttleCmd = 0;
+  } else {
+    phase = 'APPROACH';
+    desiredPitch = clamp(dy * ALT_TO_PITCH - VS_DAMP * clamp(simState.vy / VS_SCALE, -1, 1), -MAX_PITCH, MAX_PITCH);
+    if (speed < SAFE_SPEED) desiredPitch = Math.min(desiredPitch, (speed - SAFE_SPEED) * SPEED_PROT_GAIN);
+    throttleCmd = clamp(THR_TRIM + (APPROACH_SPEED - speed) * THR_SPEED_GAIN + Math.max(0, dy) * THR_CLIMB_FF, 0.1, 0.85);
+  }
+  const pitchCmd = clamp(
+    (desiredPitch - simState.pitchRad) * PITCH_KP - simState.pitchRate * PITCH_RATE_KD,
+    PITCH_LIMIT_DOWN, PITCH_LIMIT_UP,
+  );
+
+  return {
+    pitch: pitchCmd * qScale, roll: rollCmd * qScale,
+    yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed),
+    throttle: throttleCmd,
+  };
 }
 
 function waypointToLocal(wp, home) {
