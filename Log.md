@@ -722,3 +722,21 @@
 **Notes**:
 - 비행 동역학은 동일하므로 착륙 수치(91m)가 Cessna와 정확히 일치 — 모델은 시각 스킨, 물리는 공유.
 - 수동 검증: `node tests/shot.mjs <url> <port> out.png <modelKey>` 로 기체 스크린샷.
+
+## 2026-06-22 01:28 — M25: 입장 조작 팝업 + 모바일 터치 컨트롤
+
+**Status**: GREEN (인트로 팝업·터치 조이스틱/스로틀/버튼 렌더 확인, 헤드리스 회귀 PASS)
+**Files changed**: src/ui.js(인트로+터치 추가), src/main.js, tests/shot.mjs(모바일 에뮬 추가)
+**Tests**: 188 통과, 콘솔 0, landing-wind-det 5+2.5 PASS(인트로 표시 상태에서도), 인트로/터치 스크린샷 확인
+**Decisions**:
+- 인트로/조작 팝업(initIntro): 입장 시 모달 — 타이틀·키보드 표, 큰 버튼 2개("▶ AUTO 시연 시작"=loadDemoMission, "✈ 수동 비행"=닫기). 시안 글래스칵핏 스타일(레퍼런스 이미지 톤). 우하단 ? 버튼으로 재오픈. ?intro=0로 스킵(스크린샷/테스트).
+- 모바일 터치(initTouchControls): 좌하단 가상 조이스틱(피치/롤, 화면 위=기수업), 우측 세로 스로틀 슬라이더, 요L/R·CAM·일시정지·AUTO 버튼. 키보드 controls 상태에 직접 기입(포인터 이벤트, touch-action:none). 터치 시 키보드 헬프 텍스트 숨김.
+- 감지: isTouchDevice(pointer:coarse|ontouchstart|maxTouchPoints) 자동 + ?touch=1/0 강제(데스크톱 옵트인/테스트). 헤드리스 에뮬에선 자동감지 불가 → 강제 플래그로 검증.
+- **버그 수정**: UI init이 controls 선언 전 실행돼 TDZ ReferenceError → queueMicrotask로 모듈 평가 후 실행하도록 지연.
+**Next**:
+- M26: 군용 글래스칵핏 HUD 대개편(레퍼런스 이미지: 나침반 장미·피치 사다리·MFD풍 패널) + 모바일 HUD 레이아웃 정리.
+- M27: PBR 환경맵/블룸/톤매핑/대기 셰이더로 그래픽 업그레이드.
+**Notes**:
+- AUTO 모드는 입력 거의 불필요 → 모바일/첫 방문자는 "AUTO 시연" 한 번으로 전체 자율비행(크로스윈드 착륙 포함) 감상 가능.
+- 현재 모바일 HUD는 데스크톱 패널이 겹쳐 다소 혼잡 → M26에서 정리.
+- 수동: `node tests/shot.mjs <url> <port> out.png '' mobile` 로 모바일 캡처(+?touch=1).

@@ -4,7 +4,7 @@
 
 import { buildWorld, RUNWAY_START_Z } from './world.js';
 import { buildAircraft, AIRCRAFT_MODELS, DEFAULT_MODEL } from './aircraft.js';
-import { initModelPicker } from './ui.js';
+import { initModelPicker, initIntro, initTouchControls, isTouchDevice } from './ui.js';
 import { createCameraRig, nextMode, updateCamera } from './camera.js';
 import { createControlState, attachKeyboard, tickThrottle } from './controls.js';
 import { initHud, updateHud } from './hud.js';
@@ -143,16 +143,42 @@ if (typeof window !== 'undefined') {
   window.listAircraftModels = () => Object.entries(AIRCRAFT_MODELS)
     .map(([k, v]) => ({ key: k, label: v.label, role: v.role, jet: v.jet }));
   window.__aircraftModel = () => aircraftModel;
-  // Build the on-screen model picker once the DOM is ready.
-  const buildPicker = () => {
+  // Build the on-screen UI once the DOM is ready: model picker, touch controls
+  // (mobile), and the intro/controls popup.
+  const buildUI = () => {
     modelPicker = initModelPicker(
       window.listAircraftModels(),
       () => aircraftModel,
       (key) => window.setAircraftModel(key),
     );
+    const params = new URLSearchParams(location.search);
+    // Touch controls: auto on touch devices; ?touch=1 forces on (desktop opt-in
+    // / testing), ?touch=0 forces off.
+    const touchParam = params.get('touch');
+    const showTouch = touchParam === '1' || (touchParam !== '0' && isTouchDevice);
+    if (showTouch) {
+      initTouchControls(controls, {
+        onCamera: () => controls.onCameraToggle(),
+        onPause: () => { controls.paused = !controls.paused; },
+        onDemo: () => window.loadDemoMission(),
+      });
+      // The on-screen joystick replaces the keyboard help text — hide it so it
+      // doesn't overlap the touch controls on a small screen.
+      const help = document.getElementById('hud-help');
+      if (help) help.style.display = 'none';
+    }
+    // Intro popup on entry (skip with ?intro=0 for screenshots/tests).
+    if (params.get('intro') !== '0') {
+      window.__intro = initIntro({
+        touch: isTouchDevice,
+        onDemo: () => window.loadDemoMission(),
+        onManual: () => {},
+      });
+    }
   };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', buildPicker);
-  else buildPicker();
+  // Defer so the rest of the module (incl. `controls`) finishes initializing first.
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', buildUI);
+  else queueMicrotask(buildUI);
 }
 
 // Cessna-class params.
