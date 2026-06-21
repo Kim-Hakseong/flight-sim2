@@ -44,6 +44,7 @@ import {
   aeroMoments,
   bodyAngularAccel,
   sideForce,
+  highLift,
   INERTIA,
   GRAVITY,
   STALL_AOA_RAD,
@@ -135,7 +136,7 @@ const ACTUATOR_CFG = { bandwidth: 25, rateLimit: 10, min: -1, max: 1 };
 // observation tap (not in the control loop), so noise never destabilizes flight.
 const SENSOR_CFG = {
   airspeed: { noise: 0.4, bandwidth: 8 },    // m/s  (pitot, some lag)
-  altitude: { noise: 0.6, bandwidth: 6 },    // m    (baro, laggy)
+  altitude: { noise: 0.5, bandwidth: 14 },   // m    (baro, low lag for the approach)
   // IMU channels: zero lag (bandwidth Infinity by default). Real gyros/accels run
   // far faster than the control loop; any lag here erodes phase margin and
   // destabilizes the fast inner loop. Small noise only.
@@ -202,6 +203,10 @@ const sim = {
 
   // Actuator surface positions (normalized) — lag behind the commands.
   actuators: { elevator: 0, aileron: 0, rudder: 0 },
+
+  // High-lift devices (0..1), commanded by the autopilot on approach/rollout.
+  flaps: 0,
+  spoilers: 0,
 
   status: 'OK', // OK | STALL | CRASH
   vsi: 0,
@@ -376,6 +381,7 @@ function resetAircraft() {
   sim.orientation.identity();
   sim.omega.set(0, 0, 0);
   sim.actuators.elevator = sim.actuators.aileron = sim.actuators.rudder = 0;
+  sim.flaps = 0; sim.spoilers = 0;
   kfX = createKF(sim.position.x); kfZ = createKF(sim.position.z); kfY = createKF(0);
   navEstimate = null; measured = {}; navDegraded = false; navDegradedHold = 0; gpsRejectStreak = 0;
   sim.status = 'OK';
@@ -508,6 +514,8 @@ function loop(now) {
       controls.roll = apOut.roll;
       controls.yaw = apOut.yaw;
       controls.throttle = apOut.throttle;
+      sim.flaps = apOut.flaps || 0;
+      sim.spoilers = apOut.spoilers || 0;
     }
 
     // Deterministic fixed-step integration (M7): advance physics in fixed
@@ -768,8 +776,9 @@ function stepPhysics(dt) {
   if (v > 0.5) {
     aoa = angleOfAttack(sim.velocity, tmpForward, tmpUp);
   }
-  const cl = liftCoefficient(aoa);
-  const cd = dragCoefficient(cl);
+  // Base aero, then apply high-lift devices (flaps add lift+drag, spoilers add
+  // drag + dump lift) so the autopilot can fly a slow, gentle approach + brake.
+  const { cl, cd } = highLift(liftCoefficient(aoa), dragCoefficient(liftCoefficient(aoa)), sim.flaps, sim.spoilers);
   // Wing damage reduces total lift; if the two wings are unequal, the
   // imbalance produces a roll moment toward the weaker side.
   const lMul = liftMultiplier(sim.damage, 'left');
@@ -993,7 +1002,7 @@ function updateNavEstimate(dt) {
   const pX = kfX.x, pZ = kfZ.x, pY = kfY.x;
   const sx = kfStepGated(kfX, m.gpsX, dt, { q: 1.5, r: 2.5, gate: 16 });
   const sz = kfStepGated(kfZ, m.gpsZ, dt, { q: 1.5, r: 2.5, gate: 16 });
-  const sy = kfStepGated(kfY, m.altitude, dt, { q: 1.0, r: 1.0, gate: 25 });
+  const sy = kfStepGated(kfY, m.altitude, dt, { q: 8, r: 0.6, gate: 25 });
 
   // A coordinated turn briefly trips the gate (the constant-velocity model curves
   // away) — that's transient, not a fault, so the standard gated filter just coasts

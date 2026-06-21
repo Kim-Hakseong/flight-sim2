@@ -51,6 +51,21 @@ export function dragCoefficient(cl) {
   return CD0 + K_INDUCED * cl * cl;
 }
 
+// High-lift devices (M21). Flaps raise CL (lower stall speed → slower approach)
+// and CD (steeper, slower descent). Spoilers raise CD and dump lift (descent +
+// rollout braking). Deflections are 0..1.
+export const CL_FLAP    = 0.35;  // extra CL at full flaps (modest — avoids ballooning)
+export const CD_FLAP    = 0.16;  // extra CD at full flaps (drag for a slow, steep approach)
+export const CD_SPOILER = 0.12;  // extra CD at full spoilers
+export const SPOILER_LIFT_DUMP = 0.5; // fraction of lift dumped at full spoilers
+
+/** Apply flap/spoiler effects to base CL/CD. Pure. */
+export function highLift(clBase, cdBase, flap = 0, spoiler = 0) {
+  const cl = (clBase + CL_FLAP * flap) * (1 - SPOILER_LIFT_DUMP * spoiler);
+  const cd = cdBase + CD_FLAP * flap + CD_SPOILER * spoiler;
+  return { cl, cd };
+}
+
 /** Lift magnitude: 0.5 · ρ · v² · S · CL. */
 export function liftForce({ rho, v, area, cl }) {
   return 0.5 * rho * v * v * area * cl;

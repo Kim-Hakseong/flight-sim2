@@ -652,3 +652,19 @@
 **Notes**:
 - 진단 핵심: 접근 초기 클라임-실속(글라이드슬로프 목표가 현재고도 위) → min(slope,alt)로 위에서 캡처. 플레어 풍선 → 커밋 래치+파워오프.
 - 헤드리스 2개 순차실행 시 CPU부하로 폴 윈도우 만료(테스트 artifact, 크래시 아님). 단일 실행 안정 착륙(활주 2~29 m/s).
+
+## 2026-06-21 16:27 — M21: 플랩/스포일러 — 부드러운 감속착륙
+
+**Status**: GREEN 🎉
+**Files changed**: src/physics.js, src/main.js, src/autopilot.js, tests/highlift.test.mjs (new), PRD.md
+**Tests**: 5 added (highLift), 180 passing, 0 failing · 콘솔 0 · landing-check truth+estimated PASS · 전 HILS 회귀 PASS
+**Decisions**:
+- highLift 순수 함수: 플랩 CL↑+CD↑(드래그 위주 튜닝 CL_FLAP 0.35/CD_FLAP 0.16), 스포일러 CD↑+양력덤프. stepPhysics가 CL/CD에 적용, sim.flaps/spoilers는 apOut에서 지령.
+- 오토파일럿 LAND: APPROACH/FLARE 플랩 전개(접근 46→36, LANDING_SAFE 26 가드), ROLLOUT 스포일러 전개(제동). 접지 ~23 m/s·활주 감속.
+- CL_FLAP 0.8→0.35: 0.8은 진입 풍선(152→190m) 후 강하불가. 드래그 위주로 재균형하니 느린 안정 강하.
+- estimated 착륙 안정화: 기압 bandwidth 6→14·noise↓, 칼만 q 1→8·r↓ → 추정 고도 정밀 → 센서-in-the-loop 착륙 PASS.
+**Next**:
+- 수동 플랩 키, 활주로 자동 브레이크, 바람/돌풍 착륙
+**Notes**:
+- 진단: 착륙 플랩은 양력보다 항력. 양력 과다 시 진입 풍선·강하불가. estimated는 기압 노이즈에 민감 → 센서 정밀화로 해결.
+- 결과: firm landing(55 m/s) → 부드러운 슬로우 착륙(접근 37·접지 23·스포일러 제동). truth+estimated 둘 다.

@@ -95,8 +95,9 @@ const REF_SPEED    = 44;     // m/s — gain-scheduling reference (gains tuned h
 // ----- Landing (M20): glideslope approach → flare → touchdown -----
 const GLIDESLOPE     = 4 * Math.PI / 180;  // ~4° descent path to the touchdown point
 const APPROACH_ALT   = 160;                // m — cap the glideslope target (start of descent)
-const APPROACH_SPEED = 46;                  // m/s — approach airspeed (above stall)
-const FLARE_PITCH    = 1.2 * Math.PI / 180;  // small nose-up — just softens the firm touchdown
+const APPROACH_SPEED = 36;                  // m/s — slow approach (flaps lower the stall)
+const LANDING_SAFE   = 26;                  // m/s — flapped stall guard for the approach
+const FLARE_PITCH    = 2.5 * Math.PI / 180;  // nose-up at the flare to soften the touchdown
 const FLARE_ALT      = 7;                    // m AGL — begin the (short) flare
 let hasClimbedOut = false;                  // true once airborne — stops re-entering TAKEOFF
 let landingCommitted = false;               // true once low on final — no climb-back / float
@@ -267,11 +268,12 @@ function landControl(simState, landWp, speed, altAGL, qScale) {
   const glideAGL = Math.min(distToTD * Math.tan(GLIDESLOPE), APPROACH_ALT, altAGL);
   const dy = (glideAGL + GROUND_OFFSET) - simState.y;    // target − current altitude
 
-  // ----- ROLLOUT: on the ground, idle and let rolling friction stop it -----
+  // ----- ROLLOUT: on the ground — full flaps + SPOILERS to brake aerodynamically
+  // (spoilers dump lift onto the wheels and add drag), idle power, then DONE.
   if (altAGL < 1.5) {
-    if (speed < 30) { phase = 'DONE'; currentSeq = mission.items.length; }
-    else phase = 'FLARE';
-    return { pitch: 0, roll: rollCmd * qScale, yaw: 0, throttle: 0 };
+    if (speed < 20) { phase = 'DONE'; currentSeq = mission.items.length; }
+    else phase = 'ROLLOUT';
+    return { pitch: 0, roll: rollCmd * qScale, yaw: 0, throttle: 0, flaps: 1, spoilers: 1 };
   }
 
   if (altAGL < FLARE_ALT) landingCommitted = true; // committed to land — no climb-back
@@ -279,19 +281,16 @@ function landControl(simState, landWp, speed, altAGL, qScale) {
   let desiredPitch, throttleCmd;
   if (landingCommitted && altAGL >= FLARE_ALT) {
     phase = 'FLARE';
-    // Ballooned after committing → sink gently back down (never climb away again).
-    desiredPitch = -0.05;
+    desiredPitch = -0.05;                        // ballooned → put it back down
     throttleCmd = 0;
   } else if (altAGL < FLARE_ALT) {
     phase = 'FLARE';
-    // Ease the nose up to soften the touchdown; trickle power so it doesn't stall
-    // (a firm touchdown at speed is safe — the ground rolls it out).
     desiredPitch = FLARE_PITCH * clamp((FLARE_ALT - altAGL) / FLARE_ALT, 0, 1);
     throttleCmd = 0;
   } else {
     phase = 'APPROACH';
     desiredPitch = clamp(dy * ALT_TO_PITCH - VS_DAMP * clamp(simState.vy / VS_SCALE, -1, 1), -MAX_PITCH, MAX_PITCH);
-    if (speed < SAFE_SPEED) desiredPitch = Math.min(desiredPitch, (speed - SAFE_SPEED) * SPEED_PROT_GAIN);
+    if (speed < LANDING_SAFE) desiredPitch = Math.min(desiredPitch, (speed - LANDING_SAFE) * SPEED_PROT_GAIN);
     throttleCmd = clamp(THR_TRIM + (APPROACH_SPEED - speed) * THR_SPEED_GAIN + Math.max(0, dy) * THR_CLIMB_FF, 0.1, 0.85);
   }
   const pitchCmd = clamp(
@@ -299,10 +298,11 @@ function landControl(simState, landWp, speed, altAGL, qScale) {
     PITCH_LIMIT_DOWN, PITCH_LIMIT_UP,
   );
 
+  // Flaps are deployed for the whole approach/flare (lower stall, slow approach).
   return {
     pitch: pitchCmd * qScale, roll: rollCmd * qScale,
     yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed),
-    throttle: throttleCmd,
+    throttle: throttleCmd, flaps: 1, spoilers: 0,
   };
 }
 
