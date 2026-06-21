@@ -1238,10 +1238,12 @@ function pushHud() {
   const apLen = autopilot.getMissionLength();
   const apPhase = autopilot.getPhase();
 
+  const _hudRight = tmpRight.set(1, 0, 0).applyQuaternion(sim.orientation);
   updateHud({
     speed: sim.velocity.length(),
     altitude,
     aoa: sim._aoa || 0,
+    sideslip: sim.velocity.length() > 1 ? sideslipAngle(sim.velocity, fwd, _hudRight) : 0,
     vsi: sim.vsi,
     headingDeg,
     throttle01: controls.throttle,

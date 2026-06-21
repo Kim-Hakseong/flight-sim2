@@ -23,8 +23,14 @@ if (mobile) {
 }
 await send('Page.navigate', { url }); await sleep(2500);
 if (model) { await ev(`window.setAircraftModel('${model}')`); await sleep(800); }
-if (!url.includes('intro=0')) { /* keep intro visible */ } else { await ev(`window.__camMode('external')`); }
-await sleep(1200);
+if (process.env.FLY) {
+  // Real-time flight so the RAF loop keeps rendering (unlike __advance which freezes it).
+  await ev(`window.setWind && window.setWind(4,0,2)`);
+  await ev(`window.__camMode('${process.env.CAM || 'cockpit'}')`);
+  await ev(`window.loadDemoMission()`);
+  await sleep(Number(process.env.FLY) * 1000);
+} else if (!url.includes('intro=0')) { /* keep intro visible */ } else { await ev(`window.__camMode('external')`); }
+await sleep(800);
 const { data } = await send('Page.captureScreenshot', { format: 'png' });
 fs.writeFileSync(out, Buffer.from(data, 'base64'));
 console.log('wrote', out);
