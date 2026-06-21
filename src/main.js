@@ -360,6 +360,7 @@ if (typeof window !== 'undefined') {
         aoa: +(angleOfAttack(air, f, r === r ? u : u) * D).toFixed(1),
         pitch: +(Math.asin(Math.max(-1, Math.min(1, f.y))) * D).toFixed(1),
         bank: +(-Math.asin(Math.max(-1, Math.min(1, r.y))) * D).toFixed(1),
+        hdg: +(((Math.atan2(f.x, -f.z) * D) % 360 + 360) % 360).toFixed(1),
         beta: +(sideslipAngle(air, f, r) * D).toFixed(1),
         ail: +sim.actuators.aileron.toFixed(2),
         rud: +sim.actuators.rudder.toFixed(2),

@@ -18,12 +18,12 @@ await ev(`window.__resetForTest()`); await ev(`window.setNavSource('truth')`);
 await ev(`window.setWind(${east},0,${gust})`); await ev(`window.loadDemoMission()`);
 const expr = `(function(){ const r=window.__advance(1); const h=window.__hils; const d=h.diag;
   return {st:r.status, ph:h.auto.phase, alt:+(h.pos.y-0.8).toFixed(1), x:+h.pos.x.toFixed(0), gs:+h.vel.spd.toFixed(1),
-    as:d.airspd, aoa:d.aoa, pit:d.pitch, bnk:d.bank, beta:d.beta, ail:d.ail, rud:d.rud, rr:d.rollrate, yr:d.yawrate, thr:d.thr, fl:d.flaps, wx:+h.wind.x.toFixed(1), wz:+h.wind.z.toFixed(1)};})()`;
+    as:d.airspd, aoa:d.aoa, pit:d.pitch, bnk:d.bank, hdg:d.hdg, beta:d.beta, ail:d.ail, rud:d.rud, rr:d.rollrate, yr:d.yawrate, thr:d.thr, fl:d.flaps, wx:+h.wind.x.toFixed(1), wz:+h.wind.z.toFixed(1)};})()`;
 let printing = false;
 for (let t = 0; t < 200; t++) {
   const s = await ev(expr);
   if (s.ph === 'APPROACH' || process.env.ALLPH) printing = true;
-  if (printing) console.log(`t${t} ${s.ph} alt=${s.alt} x=${s.x} gs=${s.gs} AS=${s.as} aoa=${s.aoa} pit=${s.pit} bnk=${s.bnk} beta=${s.beta} ail=${s.ail} rud=${s.rud} rr=${s.rr} yr=${s.yr} fl=${s.fl} w=(${s.wx},${s.wz}) ${s.st}`);
+  if (printing) console.log(`t${t} ${s.ph} alt=${s.alt} x=${s.x} gs=${s.gs} AS=${s.as} aoa=${s.aoa} pit=${s.pit} bnk=${s.bnk} hdg=${s.hdg} beta=${s.beta} ail=${s.ail} rud=${s.rud} rr=${s.rr} yr=${s.yr} fl=${s.fl} w=(${s.wx},${s.wz}) ${s.st}`);
   if (s.st === 'CRASH' || s.ph === 'DONE') { console.log('END:', s.ph, s.st); break; }
 }
 ws.close(); process.exit(0);

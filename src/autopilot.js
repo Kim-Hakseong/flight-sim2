@@ -135,6 +135,16 @@ const APPROACH_SPEED = 42;                  // m/s — gust-resistant approach (
 const LANDING_SAFE   = 26;                  // m/s — flapped stall guard for the approach
 const FLARE_PITCH    = 2.5 * Math.PI / 180;  // nose-up at the flare to soften the touchdown
 const FLARE_ALT      = 7;                    // m AGL — begin the (short) flare
+// Auto de-crab (M28): in a crosswind the approach flies a crab (nose into wind to
+// track the centreline). Just before touchdown, kick the rudder to swing the nose
+// onto the runway heading so the gear touches down aligned (no side-load). Active
+// in the last few metres; on the ground it keeps the nose straight down the runway.
+// Ground de-crab (M28): the approach flies a crab (nose into wind) to track the
+// centreline. Airborne de-crab is impractical here — the flare is laterally marginal
+// and any rudder in the air departs it — so the nose is straightened on the GROUND
+// roll, where the wheels stabilise the lateral axis. Firm P on heading + rate damping.
+const GROUND_DECRAB_GAIN = 2.6;             // rudder per rad of heading-vs-runway error
+const GROUND_DECRAB_DAMP = 1.2;             // rudder per (rad/s) of yaw rate (damping)
 const APPROACH_FLAP_ALT = 22;                // m AGL — below this, full landing flap;
                                              // above, only partial flap (low drag). Kept
                                              // low so the full-flap drag/lift change lands
@@ -305,12 +315,13 @@ function landControl(simState, landWp, speed, altAGL, qScale, dt = 0.02) {
   // aircraft circles at height instead of descending. Along-track descends it on
   // the proper slope regardless of how far off the centreline it currently is.
   let distToTD = Math.hypot(dx, dz);
+  let courseHeading = simState.headingRad;   // runway heading (for de-crab); set below
   if (fix) {
     const a = waypointToLocal(fix, mission.home);   // centreline start (upwind)
     const cdx = tgt.x - a.x, cdz = tgt.z - a.z;      // centreline direction
     const len = Math.hypot(cdx, cdz) || 1;
     const ux = cdx / len, uz = cdz / len;            // along-course unit vector
-    const courseHeading = Math.atan2(ux, -uz);
+    courseHeading = Math.atan2(ux, -uz);
     distToTD = Math.max(0, ux * dx + uz * dz);        // remaining along-track range
     // signed perpendicular offset from the centreline (course × position) and its
     // rate (course × velocity) — PD localiser tracking. The rate term provides
@@ -338,6 +349,19 @@ function landControl(simState, landWp, speed, altAGL, qScale, dt = 0.02) {
   const desiredBank = clamp(-headingErr * HEADING_TO_BANK, -APPROACH_BANK, APPROACH_BANK) * turnMargin;
   const rollCmd = rollToBank(desiredBank, simState.bankRad, simState.rollRate);
 
+  // De-crab: in the last few metres, a gentle rudder bias swings the nose onto the
+  // runway heading so the gear touches down aligned. It is ADDED to the coordinated
+  // yaw command (which keeps the yaw-rate damper active) — a full rudder kick at low
+  // speed departs. Wings are levelled (roll → 0) as the nose comes straight.
+  const levelRoll = rollToBank(0, simState.bankRad, simState.rollRate);
+  const dampedYaw = (roll) => yawCommand(roll * qScale, simState.bankRad, simState.yawRate, speed, qScale);
+  // Ground de-crab: on the wheels the lateral axis is stable, so firmly steer the
+  // nose onto the runway heading (P on heading error + yaw-rate damping). This
+  // straightens out the touchdown crab during the rollout.
+  const groundDecrabYaw = clamp(
+    wrapPi(courseHeading - simState.headingRad) * GROUND_DECRAB_GAIN - GROUND_DECRAB_DAMP * (simState.yawRate || 0),
+    -0.7, 0.7);
+
   // Vertical: reuse the PROVEN-stable cruise longitudinal control (pitch holds the
   // target altitude with a hard speed guard, throttle holds airspeed) but feed it a
   // glideslope target altitude that descends to 0 at the touchdown point. Because
@@ -353,7 +377,8 @@ function landControl(simState, landWp, speed, altAGL, qScale, dt = 0.02) {
   if (altAGL < 1.5) {
     if (speed < 20) { phase = 'DONE'; currentSeq = mission.items.length; }
     else phase = 'ROLLOUT';
-    return { pitch: 0, roll: rollCmd * qScale, yaw: 0, throttle: 0, flaps: 1, spoilers: 1 };
+    // Ground roll: de-crab — steer the nose straight down the runway, wings level.
+    return { pitch: 0, roll: levelRoll * qScale, yaw: groundDecrabYaw, throttle: 0, flaps: 1, spoilers: 1 };
   }
 
   if (altAGL < FLARE_ALT) landingCommitted = true; // committed to land — no climb-back
@@ -383,10 +408,15 @@ function landControl(simState, landWp, speed, altAGL, qScale, dt = 0.02) {
   // correction and bleeds into a stall); full flap only on short final for the
   // flare. Keeps approach energy up so the localiser correction never departs.
   const approachFlap = altAGL < APPROACH_FLAP_ALT ? 1 : 0.5;
+  // Airborne: keep the PROVEN coordinated flare untouched. The flare is laterally
+  // marginal at this slow, low-energy state — ANY de-crab rudder in the air tips it
+  // into a directional divergence (verified). So the nose is de-crabbed on the GROUND
+  // roll instead (ROLLOUT branch above), where the wheels give lateral stability.
+  const finalRoll = rollCmd;
+  const finalYaw = dampedYaw(finalRoll);
   return {
-    pitch: pitchCmd * qScale, roll: rollCmd * qScale,
-    yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed, qScale),
-    throttle: throttleCmd, flaps: approachFlap, spoilers: 0,
+    pitch: pitchCmd * qScale, roll: finalRoll * qScale,
+    yaw: finalYaw, throttle: throttleCmd, flaps: approachFlap, spoilers: 0,
   };
 }
 
