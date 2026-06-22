@@ -1,3 +1,38 @@
+---
+project: Flight Sim2
+stage: 베타
+progress: 85
+repo_url: https://github.com/Kim-Hakseong/flight-sim2
+demo_url: https://kim-hakseong.github.io/flight-sim2/
+summary: Three.js 기반 브라우저 비행 시뮬레이터 — MAVLink/QGroundControl 연동 + HITL/SIL 브릿지
+---
+
+## 마일스톤
+- [x] MVP 비행 (M0–M4)
+- [x] QGroundControl / MAVLink 연동 (M6–M7)
+- [x] 6-DOF 비행 동역학 + 센서/결함 주입 HITL (M8–M9)
+- [x] 오토파일럿 (TECS-lite, 협조선회) + 자동 착륙 (M14–M21)
+- [x] GPS 스푸핑 중 AUTO 항로유지 (FDE + INS) (M19)
+- [x] 군용 기체 모델 + 글래스칵핏 HUD + 그래픽 업그레이드 (M24–M27)
+- [x] 다중 맵 / 날씨 / 야간 / 항모 갑판 / 조종석 뷰 (M34–M39)
+- [ ] 멀티플레이 / VR 정식 지원
+
+## 2026-06-22
+- M39: 조종석 인테리어 뷰 (V)
+- M36~M38: 항모 갑판 맵 + 시간대/날씨 프리셋 + 야간 별·달·강수 파티클
+- M32~M35: 카메라 스무딩 + 다중 맵 선택 + 실제 바다 맵
+- M24~M31: 군용 기체 + 모바일 컨트롤 + 글래스칵핏 HUD + 그래픽/그림자/구름
+
+## 2026-06-21
+- M18~M23: 센서-in-the-loop AUTO 완성, 자동 착륙(글라이드슬로프→플레어→접지), 플랩/스포일러, 바람·돌풍 착륙
+
+## 2026-06-20
+- M7~M17: 결정론적 고정스텝 적분 + 6-DOF 회전 동역학 + TECS-lite 오토파일럿 + 협조선회
+
+---
+
+<!-- 위 블록은 dev-dashboard(SSOT) 집계용. 아래는 원본 빌드 로그 -->
+
 # Log — Flight Simulator Build Log
 
 > **Append-only.** 매 Ralph 루프 끝에 **반드시** 새 entry 추가.
@@ -943,18 +978,3 @@
 - (후속) MFD 라이브 데이터(실시간 자세/속도), 캐노피 프레임 디테일.
 **Notes**:
 - 표시 전용 → 물리/착륙 불변. 검증: `FLY=6 CAM=cockpit node tests/shot.mjs ...`.
-
-## 2026-06-22 21:10 — M40: 텍스처 glTF 조종석 모델 도입
-
-**Status**: GREEN (텍스처 조종석 캐노피 렌더 확인, 착륙 불변 PASS)
-**Files changed**: assets/cockpit.glb(new), index.html(GLTFLoader 스크립트), src/main.js(glTF 로더+COCKPIT_FIT), src/ui.js(CC-BY 크레딧), CREDITS.md(new)
-**Tests**: 188 통과, 콘솔 0(app), 6 m/s 크로스윈드+2.5 거스트 착륙 PASS(센터라인 ≤110m, 20.4 m/s 롤아웃)
-**Decisions**:
-- M39 절차적 "네모 박스" 조종석이 레퍼런스와 안 맞는다는 피드백 → **실제 텍스처 glTF 모델** 도입(사용자 선택). Icosa Gallery의 "The cockpit" by Romain Revert (CC-BY 3.0, 19992 tris, 1.7MB)를 `assets/cockpit.glb`로 번들.
-- `THREE.GLTFLoader`(unpkg three@0.128.0 examples) 추가. 로드 후 모델을 바운딩박스 중심으로 정렬→래퍼 그룹에 담아 `COCKPIT_FIT`(스케일/회전/오프셋)으로 1인칭 시점에 핏.
-- **핏 튜닝**: 외부 오빗으로 모델 형상(2인승 캐노피형) 파악 → FPV 회전 스윕. 최종값 **s=2.4, ry=−π/2, py=0.45, pz=−1.15** — 카메라가 시트 안에 들어가 캐노피 프레임이 가장자리를 두르고 윈드실드로 바깥+HUD가 보이는 구도. 라이브 튜닝 훅 `window.__ckSet/__ckGet` 유지.
-- **CC-BY 의무**: 인트로/도움말 모달 푸터 + `CREDITS.md`에 출처/저자/라이선스 표기.
-**Next**:
-- (후속) 모델 머티리얼을 PBR로 업그레이드(IBL 반영), 야간/우천 시 조종석 내부 조명.
-**Notes**:
-- 표시 전용 → 물리/착륙 불변. 검증: `FLY=6 CAM=cockpit node tests/shot.mjs ...`, 외부 오빗 인스펙션은 `window.__ckForce`.
