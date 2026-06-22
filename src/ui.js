@@ -127,6 +127,20 @@ function injectIntroStyles() {
   .${NS}-btn:active { transform: translateY(1px); }
   .${NS}-btn.${NS}-primary { background: linear-gradient(180deg, rgba(60,150,230,0.45), rgba(40,110,190,0.35)); border-color: ${cyan}0.85); }
   .${NS}-btn .${NS}-bsub { display: block; font-size: 10px; font-weight: 400; opacity: 0.7; margin-top: 3px; letter-spacing: 0; }
+  .${NS}-seg { display: flex; gap: 8px; }
+  .${NS}-segbtn {
+    flex: 1 1 0; padding: 10px 8px; cursor: pointer; text-align: center;
+    border: 1px solid ${cyan}0.4); border-radius: 3px; background: rgba(40,90,150,0.12);
+    transition: background 0.14s, box-shadow 0.14s, border-color 0.14s;
+  }
+  .${NS}-segbtn:hover { background: rgba(60,140,220,0.25); }
+  .${NS}-segbtn.sel {
+    background: linear-gradient(180deg, rgba(60,150,230,0.45), rgba(40,110,190,0.32));
+    border-color: ${cyan}0.85); box-shadow: 0 0 14px ${cyan}0.3);
+  }
+  .${NS}-segname { display: block; font-size: 14px; font-weight: 700; color: #eaf6ff; letter-spacing: 1px; }
+  .${NS}-segbtn.sel .${NS}-segname { color: #9fe0ff; text-shadow: 0 0 8px ${cyan}0.7); }
+  .${NS}-segsub { display: block; font-size: 9px; opacity: 0.6; margin-top: 3px; }
   .${NS}-foot { margin-top: 14px; font-size: 10px; opacity: 0.55; text-align: center; }
   .${NS}-help-btn {
     position: fixed; bottom: 14px; right: 14px; z-index: 31; width: 34px; height: 34px;
@@ -176,6 +190,27 @@ export function initIntro(hooks) {
     keys.appendChild(row);
   }
   card.appendChild(keys);
+
+  // Control sensitivity selector (M44): three coarse buttons, mouse-DPI style.
+  if (hooks.sensitivity && hooks.sensitivity.levels) {
+    card.appendChild(el('div', `${NS}-sec`, '조종 민감도 (마우스 DPI 처럼)'));
+    const seg = el('div', `${NS}-seg`);
+    const segEls = new Map();
+    const refreshSeg = () => {
+      const cur = hooks.sensitivity.get();
+      for (const [k, b] of segEls) b.classList.toggle('sel', k === cur);
+    };
+    for (const lv of hooks.sensitivity.levels) {
+      const b = el('div', `${NS}-segbtn`);
+      b.appendChild(el('span', `${NS}-segname`, lv.label));
+      b.appendChild(el('span', `${NS}-segsub`, lv.sub));
+      b.addEventListener('click', () => { hooks.sensitivity.set(lv.key); refreshSeg(); });
+      seg.appendChild(b);
+      segEls.set(lv.key, b);
+    }
+    refreshSeg();
+    card.appendChild(seg);
+  }
 
   const btns = el('div', `${NS}-btns`);
   const demoBtn = el('div', `${NS}-btn ${NS}-primary`,

@@ -1040,3 +1040,18 @@ summary: Three.js 기반 브라우저 비행 시뮬레이터 — MAVLink/QGround
 - (후속) 기체별 콕핏 프로파일, FOV 토글.
 **Notes**:
 - 표시 전용 → 물리/착륙 불변.
+
+## 2026-06-22 23:10 — M44: 전방 시야 추가 확대 + 민감도 3단계 버튼(마우스 DPI 식)
+
+**Status**: GREEN (윈드실드 확대 + 민감도 선택/영속 확인, 194 통과, 콘솔 0)
+**Files changed**: src/main.js(COCKPIT_FIT eye + SENS 프리셋/적용), src/ui.js(민감도 세그먼트 셀렉터+스타일)
+**Tests**: 194 통과, 콘솔 0(app), 인트로 모달 버튼 3개·클릭 적용·새로고침 영속 확인
+**Decisions**:
+- 전방 시야 더 넓게: COCKPIT_FIT.eye z **2.9→2.3**(추가 전진). 윈드실드가 화면에서 더 커져 수평선/HUD가 크게, MFD 뱅크는 하단 유지. 스윕(2.5/2.3/2.1) 중 2.3이 시야 확대와 콕핏 가시성 균형.
+- 민감도 UI: **마우스 DPI 식 3단계 버튼**(부드러움/표준/예민) — `SENS_PRESETS`가 M42 입력 정형(rampUp/rampCenter/expo)에 매핑. soft=1.5/4.0/0.78, std=2.4/5.0/0.55(기본), sharp=4.2/6.5/0.30.
+- 인트로/도움말 모달에 "조종 민감도" 세그먼트 셀렉터 추가(`hooks.sensitivity`). 선택 즉시 적용 + **localStorage 영속**('fs-sensitivity') → 다음 로드에 자동 재적용. `window.__sensitivity(level)`로도 읽기/설정.
+- "?" 버튼으로 모달 재오픈해 언제든 변경 가능.
+**Next**:
+- (후속) 기체별 기본 민감도, 비행 중 항상 보이는 작은 셀렉터(옵션).
+**Notes**:
+- 표시/입력 전용 → 물리/착륙 불변. 검증: 모달 스크린샷 + window.__sensitivity/__ctrlFeel.

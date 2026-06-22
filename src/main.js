@@ -140,7 +140,7 @@ const cockpitInterior = buildCockpit(); scene.add(cockpitInterior);
 // overhead switch panel up top. Tunable live via window.__ckSet, then baked here.
 // f.eye is the pilot eye in model space; f.scale converts model-units -> metres
 // (life-size); model forward (-Z) already aligns with the view forward (-Z).
-const COCKPIT_FIT = { scale: 0.30, eye: [0, 4.72, 2.9], rot: [0, 0, 0], off: [0, -0.05, 0.05] };
+const COCKPIT_FIT = { scale: 0.30, eye: [0, 4.58, 2.3], rot: [0, 0, 0], off: [0, -0.05, 0.05] };
 if (typeof THREE.GLTFLoader === 'function') {
   new THREE.GLTFLoader().load('assets/cockpit.glb', (gltf) => {
     const model = gltf.scene;
@@ -360,6 +360,28 @@ function setAircraftModel(key) {
 let modelPicker = null;
 let mapPicker = null;
 let condPicker = null;
+
+// Control sensitivity presets (M44) — three coarse, mouse-DPI-style buckets that
+// map to the keyboard input-shaping feel (M42). "soft" = slow stick + strong expo
+// (forgiving); "sharp" = fast stick + light expo (responsive). Persisted under
+// SENS_KEY and re-applied on load.
+const SENS_PRESETS = {
+  soft:  { label: '부드러움', sub: '입문 · 둔감',  rampUp: 1.5, rampCenter: 4.0, expo: 0.78 },
+  std:   { label: '표준',     sub: '권장',          rampUp: 2.4, rampCenter: 5.0, expo: 0.55 },
+  sharp: { label: '예민',     sub: '빠른 반응',     rampUp: 4.2, rampCenter: 6.5, expo: 0.30 },
+};
+const SENS_LEVELS = Object.entries(SENS_PRESETS).map(([key, v]) => ({ key, label: v.label, sub: v.sub }));
+const DEFAULT_SENS = 'std';
+const SENS_KEY = 'fs-sensitivity';
+let sensLevel = DEFAULT_SENS;
+function applySensitivity(level) {
+  const pr = SENS_PRESETS[level] || SENS_PRESETS[DEFAULT_SENS];
+  sensLevel = SENS_PRESETS[level] ? level : DEFAULT_SENS;
+  Object.assign(CONTROL_FEEL, { rampUp: pr.rampUp, rampCenter: pr.rampCenter, expo: pr.expo });
+  try { localStorage.setItem(SENS_KEY, sensLevel); } catch { /* private mode */ }
+  return sensLevel;
+}
+
 if (typeof window !== 'undefined') {
   window.setAircraftModel = (key) => { const ok = setAircraftModel(key); if (ok && modelPicker) modelPicker.refresh(); return ok; };
   window.listAircraftModels = () => Object.entries(AIRCRAFT_MODELS)
@@ -368,6 +390,11 @@ if (typeof window !== 'undefined') {
   // Keyboard control feel (M42): tune sensitivity live. Lower rampUp / higher expo
   // = gentler. e.g. window.__ctrlFeel({ rampUp: 1.8, expo: 0.7 }). No args → read.
   window.__ctrlFeel = (opts) => { if (opts) Object.assign(CONTROL_FEEL, opts); return { ...CONTROL_FEEL }; };
+  // Control sensitivity presets (M44): three coarse buckets, mouse-DPI style. The
+  // chosen level is persisted and re-applied on load; the intro modal exposes the
+  // three buttons and window.__sensitivity reads/sets it programmatically.
+  window.__sensitivity = (lvl) => { if (lvl) applySensitivity(lvl); return sensLevel; };
+  try { applySensitivity(localStorage.getItem(SENS_KEY) || DEFAULT_SENS); } catch { applySensitivity(DEFAULT_SENS); }
   // Map selection (M35): LIVE swap — dispose the scenery group, rebuild for the new
   // biome, re-tint the persistent lights/fog, regenerate the IBL env, and reset to
   // the runway. No page reload. The choice is also persisted for next load.
@@ -442,6 +469,11 @@ if (typeof window !== 'undefined') {
         touch: isTouchDevice,
         onDemo: () => window.loadDemoMission(),
         onManual: () => {},
+        sensitivity: {
+          levels: SENS_LEVELS,
+          get: () => sensLevel,
+          set: (k) => applySensitivity(k),
+        },
       });
     }
   };
