@@ -899,3 +899,18 @@
 - M37: 시간대/날씨 프리셋.
 **Notes**:
 - 물리/착륙 맵 무관(활주로·gearOffset). 아일랜드 타워는 우현 x≈138(중심선 추종 ±100m 밖) — 콜라이더는 후속.
+
+## 2026-06-22 18:05 — M37: 시간대/날씨 프리셋
+
+**Status**: GREEN (5종 프리셋 렌더 확인, 착륙 불변 PASS)
+**Files changed**: src/world.js(CONDITIONS + buildMapContent skyMat 반환), src/clouds.js(setCloudStyle), src/main.js(applyLighting + setCondition + 피커)
+**Tests**: 188 통과, 콘솔 0, day 착륙 불변 91m, dusk/night/overcast/fog 스크린샷 확인
+**Decisions**:
+- 프리셋 5종: **Day(주간 맑음)·Dusk(황혼)·Night(야간)·Overcast(흐림)·Fog(안개)**. 맵(바이옴) **위에 레이어**로 적용 — 미지정 필드는 맵 기본값 폴백(그래서 Day는 바이옴 기본 룩 재현).
+- applyLighting(map, cond): 태양(방향=시간대·색·강도, userData.dir로 섀도우 팔로우+스카이 디스크 동기), 반구광/앰비언트, **안개(밀도 스케일·색=수평선)**, 노출(톤매핑), **스카이 셰이더 유니폼(밝기 스케일×틴트)**, 바다 틴트, **구름 불투명/색**(setCloudStyle), **IBL 환경맵 재생성**(최종 스카이색).
+- 라이브 적용(무리로드): window.setCondition. 좌측 "◢ TIME / WX" 피커. 야간엔 노출/암부로 HUD·항법등·애프터버너 글로우가 부각.
+- 맵 스왑 시 현재 컨디션 재적용(applyLighting), 컨디션 변경 시 지오메트리 유지하고 재조명만.
+**Next**:
+- (후속) 별/달(야간), 비/눈 파티클, 번개(폭풍).
+**Notes**:
+- 물리/착륙 무관(표시·조명만). 시드 유지. 검증: `COND=night node tests/shot.mjs ...`.

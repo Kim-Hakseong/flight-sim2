@@ -310,13 +310,13 @@ export function buildWorld(scene, colliders, mapKey = DEFAULT_MAP) {
   const content = buildMapContent(group, colliders, cfg, sunDir);
   scene.add(group);
 
-  return { sun, hemi, fill, sunDir, group, water: content.water, env: cfg.env, mapKey };
+  return { sun, hemi, fill, sunDir, group, water: content.water, skyMat: content.skyMat, env: cfg.env, mapKey };
 }
 
 // Build the swappable scenery for a map into `group`. Returns { water } (the
 // animated ocean mesh, or null on land maps).
 export function buildMapContent(group, colliders, cfg, sunDir) {
-  buildSky(group, sunDir, cfg.sky);
+  const skyMesh = buildSky(group, sunDir, cfg.sky);
   let water = null;
   if (cfg.water) {
     water = buildWater(group, cfg, sunDir);
@@ -328,8 +328,37 @@ export function buildMapContent(group, colliders, cfg, sunDir) {
   buildRunway(group);
   if (cfg.buildings > 0) buildBuildings(group, colliders, cfg.buildings);
   buildMountains(group, colliders, cfg.mountains.count, cfg.mountains.rock);
-  return { water };
+  return { water, skyMat: skyMesh.material };
 }
+
+// Time-of-day / weather presets (M37). Each layers ON TOP of the map's biome:
+// sun (direction = time of day, colour, intensity), hemisphere/ambient light,
+// fog density, sky tint/darkening, exposure, and cloud look. Unspecified fields
+// fall back to the map's defaults (so 'day' reproduces the base look per biome).
+export const CONDITIONS = {
+  day:      { label: 'Day',      desc: '주간 맑음', cloud: { opacity: 0.7, color: 0xdfe8f4 } },
+  dusk:     { label: 'Dusk',     desc: '황혼',
+    sunDir: [0.92, 0.15, -0.18], sunColor: 0xff9a55, sunInt: 1.0,
+    hemiSky: 0xffd2a8, hemiGround: 0x4a3a30, hemiInt: 0.7, fillColor: 0x331f2e, fillInt: 0.32,
+    exposure: 1.22, fogScale: 0.85, skyScale: 0.95, skyTint: 0xff8a45, skyTintAmt: 0.5,
+    cloud: { opacity: 0.85, color: 0xffc090 } },
+  night:    { label: 'Night',    desc: '야간',
+    sunDir: [-0.25, 0.55, -0.4], sunColor: 0xaec0ea, sunInt: 0.16,
+    hemiSky: 0x2a3a5a, hemiGround: 0x101822, hemiInt: 0.22, fillColor: 0x0c1426, fillInt: 0.5,
+    exposure: 1.0, fogScale: 0.75, skyScale: 0.14, skyTint: 0x0a1430, skyTintAmt: 0.4,
+    cloud: { opacity: 0.55, color: 0x2a3550 } },
+  overcast: { label: 'Overcast', desc: '흐림',
+    sunDir: [0.45, 0.85, -0.3], sunColor: 0xdfe6ee, sunInt: 0.5,
+    hemiSky: 0xc8d4de, hemiGround: 0x6a7278, hemiInt: 1.15, fillColor: 0x40484f, fillInt: 0.42,
+    exposure: 1.08, fogScale: 0.5, skyScale: 0.82, skyTint: 0xbcc6d0, skyTintAmt: 0.62,
+    cloud: { opacity: 0.95, color: 0xb4bec8 } },
+  fog:      { label: 'Fog',      desc: '안개',
+    sunDir: [0.45, 0.7, -0.3], sunColor: 0xeef0f2, sunInt: 0.5,
+    hemiSky: 0xdce2e8, hemiGround: 0x9aa0a6, hemiInt: 1.05, fillColor: 0x5a6066, fillInt: 0.5,
+    exposure: 1.05, fogScale: 0.16, skyScale: 0.9, skyTint: 0xd6dbe0, skyTintAmt: 0.55,
+    cloud: { opacity: 0.5, color: 0xcdd4da } },
+};
+export const DEFAULT_CONDITION = 'day';
 
 // Tileable grayscale value-noise for ground detail (modulates the vertex colour).
 function groundDetailTexture() {

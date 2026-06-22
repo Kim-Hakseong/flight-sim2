@@ -2,8 +2,8 @@
 // COORDINATE: Three.js right-handed, +Y up, -Z forward.
 // Body frame: +X right wing, +Y top, -Z nose.
 
-import { buildWorld, buildMapContent, RUNWAY_START_Z, MAPS, DEFAULT_MAP } from './world.js';
-import { buildClouds, driftClouds } from './clouds.js';
+import { buildWorld, buildMapContent, RUNWAY_START_Z, MAPS, DEFAULT_MAP, CONDITIONS, DEFAULT_CONDITION } from './world.js';
+import { buildClouds, driftClouds, setCloudStyle } from './clouds.js';
 import { buildAircraft, AIRCRAFT_MODELS, DEFAULT_MODEL } from './aircraft.js';
 import { initModelPicker, initIntro, initTouchControls, isTouchDevice } from './ui.js';
 import { createCameraRig, nextMode, updateCamera } from './camera.js';
@@ -118,7 +118,58 @@ const sunLight = world.sun;
 let currentMap = MAP_KEY;
 let mapGroup = world.group;     // swappable scenery group
 let mapWater = world.water;     // animated ocean mesh (or null)
+let mapSky = world.skyMat;      // sky shader material (re-tinted by conditions)
+const COND_KEY = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('fs-cond')) || DEFAULT_CONDITION;
+let currentCond = CONDITIONS[COND_KEY] ? COND_KEY : DEFAULT_CONDITION;
 const cloudField = buildClouds(scene);
+
+// Apply a time-of-day / weather condition on top of the active map (M37). Sets
+// the sun (direction = time of day), hemisphere/ambient light, fog, sky tint,
+// exposure, ocean tint and cloud look. Unspecified fields fall back to the map.
+const _ld = new THREE.Vector3();
+function tintColor(hex, scale, tintHex, amt) {
+  const c = new THREE.Color(hex).multiplyScalar(scale == null ? 1 : scale);
+  if (tintHex != null) c.lerp(new THREE.Color(tintHex), amt || 0);
+  return c;
+}
+function applyLighting(mapCfg, condKey) {
+  const cond = CONDITIONS[condKey] || CONDITIONS[DEFAULT_CONDITION];
+  const dir = _ld.set(...(cond.sunDir || [0.55, 0.7, -0.35])).normalize();
+  if (sunLight.userData.dir) sunLight.userData.dir.copy(dir); else sunLight.userData.dir = dir.clone();
+  sunLight.color.set(cond.sunColor ?? mapCfg.sky.sun);
+  sunLight.intensity = cond.sunInt ?? 1.05;
+  world.hemi.color.set(cond.hemiSky ?? mapCfg.hemi.sky);
+  world.hemi.groundColor.set(cond.hemiGround ?? mapCfg.hemi.ground);
+  world.hemi.intensity = cond.hemiInt ?? mapCfg.hemi.intensity;
+  world.fill.color.set(cond.fillColor ?? 0x223344);
+  world.fill.intensity = cond.fillInt ?? 0.25;
+  renderer.toneMappingExposure = cond.exposure ?? 1.15;
+
+  const hz = tintColor(mapCfg.sky.horizon, cond.skyScale, cond.skyTint, cond.skyTintAmt);
+  const zn = tintColor(mapCfg.sky.zenith, cond.skyScale, cond.skyTint, cond.skyTintAmt);
+  const gd = tintColor(mapCfg.sky.ground, cond.skyScale, cond.skyTint, cond.skyTintAmt);
+  if (mapSky) {
+    mapSky.uniforms.horizonColor.value.copy(hz);
+    mapSky.uniforms.zenithColor.value.copy(zn);
+    mapSky.uniforms.groundColor.value.copy(gd);
+    mapSky.uniforms.sunDirection.value.copy(dir);
+    mapSky.uniforms.sunColor.value.set(cond.sunColor ?? mapCfg.sky.sun);
+  }
+  if (scene.fog) {
+    scene.fog.color.copy(hz);                       // fog matches the horizon
+    scene.fog.near = mapCfg.fog.near * (cond.fogScale ?? 1);
+    scene.fog.far = mapCfg.fog.far * (cond.fogScale ?? 1);
+  }
+  if (mapWater) {
+    mapWater.material.uniforms.uSky.value.copy(hz);
+    mapWater.material.uniforms.uSun.value.set(cond.sunColor ?? mapCfg.sky.sun);
+    mapWater.material.uniforms.uSunDir.value.copy(dir);
+    mapWater.material.uniforms.uDeep.value.multiplyScalar(1); // (kept; deep stays biome)
+  }
+  if (cond.cloud) setCloudStyle(cloudField, cond.cloud.opacity, cond.cloud.color);
+  // Reflections (IBL) re-tinted to the final sky.
+  regenEnv({ sky: zn.getHex(), horizon: hz.getHex(), ground: gd.getHex() });
+}
 
 // Image-based lighting (M27): prefilter a sky/ground gradient into an environment
 // map so the PBR materials (jet metal, canopy glass) pick up real reflections.
@@ -147,7 +198,8 @@ function regenEnv(ec) {
     console.warn('[env] PMREM environment unavailable:', e && e.message);
   }
 }
-regenEnv(world.env || { sky: 0x2a55a8, horizon: 0xc7d6e6, ground: 0x3a4a40 });
+// Initial lighting from the active map + condition (also generates the env map).
+applyLighting(MAPS[currentMap], currentCond);
 
 const effects = createEffects(scene);
 
@@ -249,6 +301,7 @@ function setAircraftModel(key) {
 }
 let modelPicker = null;
 let mapPicker = null;
+let condPicker = null;
 if (typeof window !== 'undefined') {
   window.setAircraftModel = (key) => { const ok = setAircraftModel(key); if (ok && modelPicker) modelPicker.refresh(); return ok; };
   window.listAircraftModels = () => Object.entries(AIRCRAFT_MODELS)
@@ -264,15 +317,11 @@ if (typeof window !== 'undefined') {
     disposeObject(mapGroup);
     colliders.boxes.length = 0; colliders.cones.length = 0;
     mapGroup = new THREE.Group(); mapGroup.name = 'mapContent';
-    mapWater = buildMapContent(mapGroup, colliders, cfg, world.sunDir).water;
+    const content = buildMapContent(mapGroup, colliders, cfg, world.sunDir);
+    mapWater = content.water; mapSky = content.skyMat;
     scene.add(mapGroup);
-    world.hemi.color.set(cfg.hemi.sky);
-    world.hemi.groundColor.set(cfg.hemi.ground);
-    world.hemi.intensity = cfg.hemi.intensity;
-    sunLight.color.set(cfg.sky.sun);
-    scene.fog.color.set(cfg.fog.color); scene.fog.near = cfg.fog.near; scene.fog.far = cfg.fog.far;
-    regenEnv(cfg.env);
     currentMap = key;
+    applyLighting(cfg, currentCond);    // re-apply the time/weather to the new biome
     if (typeof resetAircraft === 'function') resetAircraft();
     try { sessionStorage.setItem('fs-map', key); } catch {}
     if (mapPicker) mapPicker.refresh();
@@ -280,6 +329,17 @@ if (typeof window !== 'undefined') {
     return true;
   };
   window.__map = () => currentMap;
+  // Time-of-day / weather (M37): live, no rebuild — just re-light the scene.
+  window.setCondition = (key) => {
+    if (!CONDITIONS[key] || key === currentCond) return false;
+    currentCond = key;
+    applyLighting(MAPS[currentMap], currentCond);
+    try { sessionStorage.setItem('fs-cond', key); } catch {}
+    if (condPicker) condPicker.refresh();
+    console.log(`[cond] → ${key} (${CONDITIONS[key].label})`);
+    return true;
+  };
+  window.__cond = () => currentCond;
   // Build the on-screen UI once the DOM is ready: model + map pickers, touch
   // controls (mobile), and the intro/controls popup.
   const buildUI = () => {
@@ -293,6 +353,12 @@ if (typeof window !== 'undefined') {
       () => currentMap,
       (key) => window.setMap(key),
       { title: '◢ MAP', top: 188 },
+    );
+    condPicker = initModelPicker(
+      Object.entries(CONDITIONS).map(([k, v]) => ({ key: k, label: v.label, role: v.desc })),
+      () => currentCond,
+      (key) => window.setCondition(key),
+      { title: '◢ TIME / WX', top: 372 },
     );
     const params = new URLSearchParams(location.search);
     // Touch controls are always created (so the 🕹 toggle works on any device); they

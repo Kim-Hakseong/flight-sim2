@@ -63,6 +63,17 @@ export function buildClouds(scene, opts = {}) {
   return field;
 }
 
+// Restyle the cloud field for a weather/time preset (opacity + tint). M37.
+export function setCloudStyle(field, opacity, color) {
+  if (!field) return;
+  field.traverse((o) => {
+    if (o.isSprite && o.material) {
+      o.material.opacity = opacity;
+      if (color != null) o.material.color.set(color);
+    }
+  });
+}
+
 /** Drift the whole field slowly with the prevailing wind, wrapping to stay around. */
 export function driftClouds(field, dt) {
   if (!field) return;
