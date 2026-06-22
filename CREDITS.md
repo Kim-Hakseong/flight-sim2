@@ -3,11 +3,13 @@
 ## 3D Models
 
 ### Cockpit interior — `assets/cockpit.glb`
-- **Title**: "The cockpit"
-- **Author**: Romain Revert
+- **Title**: "Cockpit control center"
+- **Author**: Google
 - **License**: [Creative Commons Attribution (CC-BY 3.0)](https://creativecommons.org/licenses/by/3.0/)
 - **Source**: Icosa Gallery (open Google Poly successor), `https://api.icosa.gallery`
-- **Use**: Rendered as the first-person cockpit interior in the in-cockpit camera view (press `V`).
+- **Use**: Rendered as the first-person glass flight-deck in the in-cockpit camera view
+  (press `V`). The model is anchored at the pilot eye so the camera sits in the seat —
+  MFD glass panels below, windshield ahead, overhead switch panel above.
 
 Per the CC-BY license, attribution is also shown in the in-app intro/help modal.
 

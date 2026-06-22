@@ -978,3 +978,35 @@ summary: Three.js 기반 브라우저 비행 시뮬레이터 — MAVLink/QGround
 - (후속) MFD 라이브 데이터(실시간 자세/속도), 캐노피 프레임 디테일.
 **Notes**:
 - 표시 전용 → 물리/착륙 불변. 검증: `FLY=6 CAM=cockpit node tests/shot.mjs ...`.
+
+## 2026-06-22 21:10 — M40: 텍스처 glTF 조종석 모델 도입
+
+**Status**: GREEN (텍스처 조종석 캐노피 렌더 확인, 착륙 불변 PASS)
+**Files changed**: assets/cockpit.glb(new), index.html(GLTFLoader 스크립트), src/main.js(glTF 로더+COCKPIT_FIT), src/ui.js(CC-BY 크레딧), CREDITS.md(new)
+**Tests**: 188 통과, 콘솔 0(app), 6 m/s 크로스윈드+2.5 거스트 착륙 PASS(센터라인 ≤110m, 20.4 m/s 롤아웃)
+**Decisions**:
+- M39 절차적 "네모 박스" 조종석이 레퍼런스와 안 맞는다는 피드백 → **실제 텍스처 glTF 모델** 도입(사용자 선택). Icosa Gallery의 "The cockpit" by Romain Revert (CC-BY 3.0, 19992 tris, 1.7MB)를 `assets/cockpit.glb`로 번들.
+- `THREE.GLTFLoader`(unpkg three@0.128.0 examples) 추가. 로드 후 모델을 바운딩박스 중심으로 정렬→래퍼 그룹에 담아 `COCKPIT_FIT`(스케일/회전/오프셋)으로 1인칭 시점에 핏.
+- **핏 튜닝**: 외부 오빗으로 모델 형상(2인승 캐노피형) 파악 → FPV 회전 스윕. 최종값 **s=2.4, ry=−π/2, py=0.45, pz=−1.15** — 카메라가 시트 안에 들어가 캐노피 프레임이 가장자리를 두르고 윈드실드로 바깥+HUD가 보이는 구도. 라이브 튜닝 훅 `window.__ckSet/__ckGet` 유지.
+- **CC-BY 의무**: 인트로/도움말 모달 푸터 + `CREDITS.md`에 출처/저자/라이선스 표기.
+**Next**:
+- (후속) 모델 머티리얼을 PBR로 업그레이드(IBL 반영), 야간/우천 시 조종석 내부 조명.
+**Notes**:
+- 표시 전용 → 물리/착륙 불변. 검증: `FLY=6 CAM=cockpit node tests/shot.mjs ...`, 외부 오빗 인스펙션은 `window.__ckForce`.
+
+## 2026-06-22 21:50 — M41: 실제 글래스 플라이트덱 콕핏 모델 교체
+
+**Status**: GREEN (실제 계기판 글래스 콕핏 렌더 확인, 착륙 불변 PASS)
+**Files changed**: assets/cockpit.glb(교체), src/main.js(앵커 기반 핏 + updateCockpit), src/ui.js(크레딧), CREDITS.md
+**Tests**: 188 통과, 콘솔 0(2회 클린), 6 m/s 크로스윈드+2.5 거스트 착륙 PASS(센터라인 ≤110m)
+**Decisions**:
+- 사용자 피드백 "그래도 조종석 별로야" → M40의 stylized 2인승 모델("The cockpit")은 전투기 글래스 콕핏과 결이 안 맞음. 사용자 선택대로 **실제 제트 콕핏 모델 탐색**.
+- Icosa Gallery 다수 후보 썸네일/오빗 검수: "In the Cockpit"·"Open-Cockpit"=Tilt Brush 아트, f16/f18 jet=외부 모델(캐노피 내부 비어있음, FPV 부적합) → 모두 탈락.
+- **채택**: "Cockpit control center" by **Google** (CC-BY, 2620 tris, **978KB**) — 우주왕복선형 글래스 플라이트덱. 오버헤드 스위치 패널 + 글레어실드 + **MFD 글래스 디스플레이 뱅크** + 센터 콘솔 + 시트. 진짜 계기판 콕핏.
+- **앵커 기반 핏**으로 로더 재작성: 모델을 파일럿 **eye 포인트**(model space [0,4.58,4.5])에 앵커링→카메라가 시트 안에 위치. `scale=0.30`(라이프사이즈), 모델 forward(-Z)가 뷰 forward(-Z)와 일치(회전 불필요). updateCockpit은 cockpitInterior를 카메라 eye에 그대로 배치(앵커가 위치 처리). 윈드실드로 바깥 세계+HUD가 보임.
+- 라이브 튜닝 훅 `window.__ckSet(scale,ex,ey,ez,rx,ry,rz,ox,oy,oz)`/`__ckGet` 갱신. CC-BY 크레딧을 Google "Cockpit control center"로 변경(인트로 모달+CREDITS.md).
+- dev 검수 아티팩트(etc/inspect.html, *_inspect.glb) 커밋 제외.
+**Next**:
+- (후속) 야간/우천 시 MFD 자발광 강조, 윈드실드 가시 영역 확대 옵션.
+**Notes**:
+- 표시 전용 → 물리/착륙 불변. 검증: `FLY=6 CAM=cockpit node tests/shot.mjs ...`.

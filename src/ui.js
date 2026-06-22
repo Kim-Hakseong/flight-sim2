@@ -188,7 +188,7 @@ export function initIntro(hooks) {
   card.appendChild(btns);
   card.appendChild(el('div', `${NS}-foot`, '좌상단에서 기체 선택 · 우하단 ? 로 도움말 다시 보기'));
   card.appendChild(el('div', `${NS}-foot`,
-    '조종석 모델 “The cockpit” © Romain Revert — <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener" style="color:#9fe0ff">CC-BY 3.0</a>'));
+    '조종석 모델 “Cockpit control center” © Google — <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener" style="color:#9fe0ff">CC-BY 3.0</a>'));
 
   modal.appendChild(card);
   document.body.appendChild(modal);

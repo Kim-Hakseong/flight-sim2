@@ -134,30 +134,35 @@ let precipMode = null;
 // pinned to the SMOOTHED camera (fixed in the view, no jitter) — the world tilts
 // behind it like a real cockpit. Body origin sits at -COCKPIT_OFFSET from the eye.
 const cockpitInterior = buildCockpit(); scene.add(cockpitInterior);
-// Textured glTF cockpit (M40): replaces the procedural panel once loaded. The fit
-// (scale/rotation/offset) is tunable live via window.__ckSet, then baked in.
-const COCKPIT_FIT = { s: 2.4, rx: 0, ry: -Math.PI / 2, rz: 0, px: 0, py: 0.45, pz: -1.15 };
+// Textured glTF cockpit (M41): a real glass flight-deck — "Cockpit control center"
+// by Google (CC-BY). The model is anchored at the pilot EYE point so the camera
+// sits in the seat: MFD glass panels below, windshield ahead (world shows through),
+// overhead switch panel up top. Tunable live via window.__ckSet, then baked here.
+// f.eye is the pilot eye in model space; f.scale converts model-units -> metres
+// (life-size); model forward (-Z) already aligns with the view forward (-Z).
+const COCKPIT_FIT = { scale: 0.30, eye: [0, 4.58, 4.5], rot: [0, 0, 0], off: [0, -0.05, 0.05] };
 if (typeof THREE.GLTFLoader === 'function') {
   new THREE.GLTFLoader().load('assets/cockpit.glb', (gltf) => {
     const model = gltf.scene;
     model.traverse((c) => { if (c.isMesh) { c.castShadow = false; c.receiveShadow = false; if (c.material) c.material.fog = true; } });
-    const box = new THREE.Box3().setFromObject(model);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    model.position.sub(center);                       // centre at origin
-    const wrap = new THREE.Group(); wrap.add(model);
     const f = COCKPIT_FIT;
-    const baseScale = 1.7 / Math.max(size.x, 0.001);  // fit width ~1.7
-    const apply = () => { wrap.scale.setScalar(baseScale * f.s); wrap.rotation.set(f.rx, f.ry, f.rz); wrap.position.set(f.px, f.py, f.pz); };
+    const wrap = new THREE.Group(); wrap.add(model);
+    const apply = () => {
+      model.position.set(-f.eye[0], -f.eye[1], -f.eye[2]);   // eye anchor -> origin
+      wrap.scale.setScalar(f.scale);
+      wrap.rotation.set(f.rot[0], f.rot[1], f.rot[2]);
+      wrap.position.set(f.off[0], f.off[1], f.off[2]);
+    };
     apply();
     while (cockpitInterior.children.length) cockpitInterior.remove(cockpitInterior.children[0]);
     cockpitInterior.add(wrap);
-    window.__ckSet = (s, rx, ry, rz, px, py, pz) => { Object.assign(f, { s, rx, ry, rz, px, py, pz }); apply(); };
-    window.__ckGet = () => ({ ...f, baseScale: +baseScale.toFixed(3), size: [+size.x.toFixed(2), +size.y.toFixed(2), +size.z.toFixed(2)] });
-    console.log('[cockpit] glTF model loaded', size.toArray());
+    window.__ckSet = (scale, ex, ey, ez, rx, ry, rz, ox, oy, oz) => {
+      Object.assign(f, { scale, eye: [ex, ey, ez], rot: [rx, ry, rz], off: [ox, oy, oz] }); apply();
+    };
+    window.__ckGet = () => JSON.parse(JSON.stringify(f));
+    console.log('[cockpit] glTF flight-deck loaded');
   }, undefined, (e) => console.warn('[cockpit] glTF load failed:', e && e.message));
 }
-const _ckOff = new THREE.Vector3();
 function updateCockpit() {
   const force = typeof window !== 'undefined' && window.__ckForce;  // debug: inspect the model
   const show = force || (camRig.mode === 'cockpit' && vehicleType === 'plane' && !isReplaying(recorder));
@@ -167,11 +172,11 @@ function updateCockpit() {
   aircraft.visible = force ? false : !show;
   if (!show) return;
   if (force) { cockpitInterior.position.copy(aircraft.position); cockpitInterior.quaternion.identity(); return; }
+  // The model is anchored at the pilot eye, so place it right at the camera eye and
+  // orient it with the camera — the seat moves with the head, world shows through
+  // the windshield, and the panel banks with the aircraft like a real cockpit.
   cockpitInterior.quaternion.copy(camera.quaternion);
-  // Body origin relative to the eye. Raised a touch (-0.40 vs the true -0.62) so the
-  // panel + MFDs sit prominently in the lower half of the view, like a real cockpit.
-  _ckOff.set(0, -0.40, 1.15).applyQuaternion(camera.quaternion);
-  cockpitInterior.position.copy(camera.position).add(_ckOff);
+  cockpitInterior.position.copy(camera.position);
 }
 
 // Apply a time-of-day / weather condition on top of the active map (M37). Sets
