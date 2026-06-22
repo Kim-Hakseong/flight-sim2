@@ -266,6 +266,7 @@ if (typeof window !== 'undefined') {
       onCamera: () => controls.onCameraToggle(),
       onPause: () => { controls.paused = !controls.paused; },
       onDemo: () => window.loadDemoMission(),
+      onReset: () => controls.onReset(),
       onToggle: syncHelp,
     }, startVisible);
     window.__toggleTouch = (v) => touchUI.setVisible(v == null ? !touchUI.isVisible() : v);

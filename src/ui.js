@@ -338,7 +338,9 @@ export function initTouchControls(state, hooks, startVisible = true) {
   pauseBtn.addEventListener('pointerdown', (e) => { hooks.onPause && hooks.onPause(); e.preventDefault(); });
   const autoBtn = el('div', `${NS}-tbtn auto pe`, 'AUTO');
   autoBtn.addEventListener('pointerdown', (e) => { hooks.onDemo && hooks.onDemo(); e.preventDefault(); });
-  row2.appendChild(camBtn); row2.appendChild(pauseBtn); row2.appendChild(autoBtn);
+  const resetBtn = el('div', `${NS}-tbtn pe`, '↻ RST');
+  resetBtn.addEventListener('pointerdown', (e) => { hooks.onReset && hooks.onReset(); e.preventDefault(); });
+  row2.appendChild(resetBtn); row2.appendChild(camBtn); row2.appendChild(pauseBtn); row2.appendChild(autoBtn);
 
   tbtns.appendChild(yawRow); tbtns.appendChild(row2);
   root.appendChild(tbtns);
