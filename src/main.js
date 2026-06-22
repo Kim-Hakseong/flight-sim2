@@ -134,14 +134,39 @@ let precipMode = null;
 // pinned to the SMOOTHED camera (fixed in the view, no jitter) — the world tilts
 // behind it like a real cockpit. Body origin sits at -COCKPIT_OFFSET from the eye.
 const cockpitInterior = buildCockpit(); scene.add(cockpitInterior);
+// Textured glTF cockpit (M40): replaces the procedural panel once loaded. The fit
+// (scale/rotation/offset) is tunable live via window.__ckSet, then baked in.
+const COCKPIT_FIT = { s: 2.4, rx: 0, ry: -Math.PI / 2, rz: 0, px: 0, py: 0.45, pz: -1.15 };
+if (typeof THREE.GLTFLoader === 'function') {
+  new THREE.GLTFLoader().load('assets/cockpit.glb', (gltf) => {
+    const model = gltf.scene;
+    model.traverse((c) => { if (c.isMesh) { c.castShadow = false; c.receiveShadow = false; if (c.material) c.material.fog = true; } });
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    model.position.sub(center);                       // centre at origin
+    const wrap = new THREE.Group(); wrap.add(model);
+    const f = COCKPIT_FIT;
+    const baseScale = 1.7 / Math.max(size.x, 0.001);  // fit width ~1.7
+    const apply = () => { wrap.scale.setScalar(baseScale * f.s); wrap.rotation.set(f.rx, f.ry, f.rz); wrap.position.set(f.px, f.py, f.pz); };
+    apply();
+    while (cockpitInterior.children.length) cockpitInterior.remove(cockpitInterior.children[0]);
+    cockpitInterior.add(wrap);
+    window.__ckSet = (s, rx, ry, rz, px, py, pz) => { Object.assign(f, { s, rx, ry, rz, px, py, pz }); apply(); };
+    window.__ckGet = () => ({ ...f, baseScale: +baseScale.toFixed(3), size: [+size.x.toFixed(2), +size.y.toFixed(2), +size.z.toFixed(2)] });
+    console.log('[cockpit] glTF model loaded', size.toArray());
+  }, undefined, (e) => console.warn('[cockpit] glTF load failed:', e && e.message));
+}
 const _ckOff = new THREE.Vector3();
 function updateCockpit() {
-  const show = camRig.mode === 'cockpit' && vehicleType === 'plane' && !isReplaying(recorder);
+  const force = typeof window !== 'undefined' && window.__ckForce;  // debug: inspect the model
+  const show = force || (camRig.mode === 'cockpit' && vehicleType === 'plane' && !isReplaying(recorder));
   cockpitInterior.visible = show;
   // Hide the exterior airframe in the cockpit view — otherwise the camera (inside
   // the solid fuselage) only sees its interior and the panel is occluded.
-  aircraft.visible = !show;
+  aircraft.visible = force ? false : !show;
   if (!show) return;
+  if (force) { cockpitInterior.position.copy(aircraft.position); cockpitInterior.quaternion.identity(); return; }
   cockpitInterior.quaternion.copy(camera.quaternion);
   // Body origin relative to the eye. Raised a touch (-0.40 vs the true -0.62) so the
   // panel + MFDs sit prominently in the lower half of the view, like a real cockpit.
