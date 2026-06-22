@@ -140,7 +140,7 @@ const cockpitInterior = buildCockpit(); scene.add(cockpitInterior);
 // overhead switch panel up top. Tunable live via window.__ckSet, then baked here.
 // f.eye is the pilot eye in model space; f.scale converts model-units -> metres
 // (life-size); model forward (-Z) already aligns with the view forward (-Z).
-const COCKPIT_FIT = { scale: 0.30, eye: [0, 4.58, 4.5], rot: [0, 0, 0], off: [0, -0.05, 0.05] };
+const COCKPIT_FIT = { scale: 0.30, eye: [0, 4.72, 2.9], rot: [0, 0, 0], off: [0, -0.05, 0.05] };
 if (typeof THREE.GLTFLoader === 'function') {
   new THREE.GLTFLoader().load('assets/cockpit.glb', (gltf) => {
     const model = gltf.scene;
