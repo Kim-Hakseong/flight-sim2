@@ -72,6 +72,17 @@ export const MAPS = {
     water: { deep: 0x0a3450, shallow: 0x1f6f8c },  // real animated sea (M35)
     island: 1500,                                  // sand island radius around the runway
   },
+  carrier: {
+    label: 'Carrier', desc: '항모 갑판',
+    sky: { horizon: 0xb8d6e0, zenith: 0x2c72b0, ground: 0x1a4a5a, sun: 0xfff4d6 },
+    fog: { color: 0xb8d6e0, near: 2200, far: 11000 },
+    terrain: { grass: [0.4, 0.42, 0.44], dirt: [0.4, 0.42, 0.44], rock: [0.45, 0.47, 0.49], snow: [0.9, 0.94, 0.96], scale: 8 },
+    hemi: { sky: 0xdef0ff, ground: 0x2a4a55, intensity: 0.82 },
+    buildings: 0, mountains: { count: 7, rock: 0x55615a },
+    env: { sky: 0x2c72b0, horizon: 0xb8d6e0, ground: 0x12404e },
+    water: { deep: 0x0a3450, shallow: 0x1f6f8c },
+    carrier: true,                                 // build a flight deck (M36) not an island
+  },
 };
 export const DEFAULT_MAP = 'plains';
 
@@ -210,6 +221,59 @@ function buildIsland(parent, radius) {
   parent.add(isle);
 }
 
+// Aircraft-carrier flight deck (M36): a long grey metal deck carrying the runway,
+// with a starboard island superstructure, deck edge, and a sponson. Stylised /
+// oversized (the runway is 2 km) but unmistakably a carrier deck on the sea.
+function buildCarrierDeck(parent) {
+  const deckMat = new THREE.MeshStandardMaterial({ color: 0x4a4f55, metalness: 0.5, roughness: 0.7 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x33373c, metalness: 0.55, roughness: 0.6 });
+  const lightMat = new THREE.MeshStandardMaterial({ color: 0x6b7178, metalness: 0.5, roughness: 0.65 });
+  const W = 320, L = RUNWAY_LENGTH + 200, TH = 14;
+
+  // Main deck slab (top surface at y = -0.05, just under the runway markings).
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(W, TH, L), deckMat);
+  deck.position.set(0, -0.05 - TH / 2, 0);
+  deck.receiveShadow = true; deck.castShadow = true;
+  parent.add(deck);
+
+  // Angled / non-skid deck zones (subtle darker panels along the sides).
+  for (const sx of [-1, 1]) {
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(60, 0.3, L * 0.9), darkMat);
+    panel.position.set(sx * (W / 2 - 45), 0.06, 0);
+    panel.receiveShadow = true;
+    parent.add(panel);
+  }
+
+  // Deck-edge catwalk rails (thin boxes around the perimeter).
+  const railMat = darkMat;
+  const railZ = new THREE.Mesh(new THREE.BoxGeometry(2, 1.6, L), railMat);
+  railZ.position.set(-W / 2, 0.8, 0); parent.add(railZ);
+  const railZ2 = railZ.clone(); railZ2.position.x = W / 2; parent.add(railZ2);
+
+  // Starboard island superstructure (tower) — stacked boxes + mast + radar.
+  const island = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(34, 30, 150), lightMat);
+  base.position.set(0, 15, 0); base.castShadow = true; island.add(base);
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(30, 16, 70), deckMat);
+  bridge.position.set(0, 38, -10); bridge.castShadow = true; island.add(bridge);
+  const funnel = new THREE.Mesh(new THREE.BoxGeometry(20, 18, 40), darkMat);
+  funnel.position.set(0, 39, 40); funnel.castShadow = true; island.add(funnel);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 40, 8), darkMat);
+  mast.position.set(0, 66, -10); mast.castShadow = true; island.add(mast);
+  // spinning-look radar bar
+  const radar = new THREE.Mesh(new THREE.BoxGeometry(22, 1.2, 5), lightMat);
+  radar.position.set(0, 50, -10); island.add(radar);
+  island.position.set(W / 2 - 22, 0, 120);
+  parent.add(island);
+
+  // A couple of deck antennas / lights on the port edge.
+  for (let i = -2; i <= 2; i++) {
+    const a = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 6, 6), darkMat);
+    a.position.set(-W / 2 + 2, 3, i * 300);
+    parent.add(a);
+  }
+}
+
 // ---------- World construction ----------
 
 export function buildWorld(scene, colliders, mapKey = DEFAULT_MAP) {
@@ -256,7 +320,8 @@ export function buildMapContent(group, colliders, cfg, sunDir) {
   let water = null;
   if (cfg.water) {
     water = buildWater(group, cfg, sunDir);
-    buildIsland(group, cfg.island || 1500);
+    if (cfg.carrier) buildCarrierDeck(group);
+    else buildIsland(group, cfg.island || 1500);
   } else {
     buildGround(group, cfg.terrain);
   }

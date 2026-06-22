@@ -885,3 +885,17 @@
 - (후속) 섬 해안선 디테일, 항모 갑판 맵, 시간대/날씨.
 **Notes**:
 - 검증: `MAP=ocean`(로드), `SWAP=ocean`(라이브) node tests/shot.mjs.
+
+## 2026-06-22 17:50 — M36: 항모 갑판 맵
+
+**Status**: GREEN (항모 갑판 렌더 확인, 콘솔 0)
+**Files changed**: src/world.js(carrier 맵 + buildCarrierDeck)
+**Tests**: 콘솔 0, 항모 외부/비행 스크린샷 확인(갑판·아일랜드 타워·바다)
+**Decisions**:
+- 5번째 맵 Carrier: ocean 기반(애니 워터) + 모래섬 대신 **회색 금속 비행갑판**. 활주로를 갑판 위에 탑재(top y≈0, 워터 −0.4). 양현 비스듬 비스킷 패널(다크), 갑판 가장자리 캣워크 레일, **우현 아일랜드 슈퍼스트럭처**(브리지+퍼널+마스트+레이더), 포트엣지 안테나. 원거리 섬-산 7개.
+- 스타일라이즈(활주로 2km라 갑판도 오버사이즈)이나 "항모 갑판"으로 명확히 인식. PBR 금속 머티리얼 → 환경맵 반사.
+- buildMapContent에서 cfg.carrier면 buildCarrierDeck, 아니면 buildIsland.
+**Next**:
+- M37: 시간대/날씨 프리셋.
+**Notes**:
+- 물리/착륙 맵 무관(활주로·gearOffset). 아일랜드 타워는 우현 x≈138(중심선 추종 ±100m 밖) — 콜라이더는 후속.
