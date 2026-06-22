@@ -27,6 +27,7 @@ if (process.env.MAP) {
   await sleep(2800);
 }
 if (model) { await ev(`window.setAircraftModel('${model}')`); await sleep(800); }
+if (process.env.SWAP) { await ev(`window.setMap('${process.env.SWAP}')`); await sleep(1200); } // live map swap
 if (process.env.FLY) {
   // Real-time flight so the RAF loop keeps rendering (unlike __advance which freezes it).
   await ev(`window.setWind && window.setWind(4,0,2)`);

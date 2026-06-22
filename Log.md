@@ -871,3 +871,17 @@
 **Notes**:
 - 결정론 시드 유지(빌딩/산/구름). 물리/착륙 불변.
 - 검증: `MAP=desert node tests/shot.mjs ...`.
+
+## 2026-06-22 03:30 — M35: 실제 바다 맵 + 라이브 맵 스왑
+
+**Status**: GREEN (오션 맵 렌더·라이브 스왑 확인, 착륙 불변 PASS)
+**Files changed**: src/world.js(워터 셰이더+섬+맵 콘텐츠 그룹), src/main.js(라이브 스왑+워터 애니+env 재생성), tests/shot.mjs(SWAP)
+**Tests**: 188 통과, 콘솔 0(스왑 후도), landing-wind-det 5+2.5 PASS(불변 91m), 오션 로드/라이브스왑 스크린샷 확인
+**Decisions**:
+- **실제 바다(Ocean 맵)**: 절차적 애니메이션 워터 셰이더(파동 노멀·프레넬·태양 글린트·수평선 페이드)로 40km 수면. 활주로는 **모래 섬(반경 1500)** 위에, 산은 바다에서 솟은 섬으로(빌딩 0). uTime을 매 프레임 갱신. coastal(가짜 청록 지면) → ocean으로 교체.
+- **라이브 맵 스왑(무리로드)**: 월드 지오메트리를 **단일 그룹(mapContent)**으로 묶어, 스왑 시 그룹만 dispose+재생성. 광원(hemi/sun)·안개는 **지속(재틴트만)**, IBL 환경맵 재생성(regenEnv), 콜라이더 클리어+재적재, 활주로로 리셋. window.setMap이 리로드 대신 라이브 교체.
+- 물리/착륙은 맵 무관(활주로·gearOffset 기반) → 불변. 시드 유지.
+**Next**:
+- (후속) 섬 해안선 디테일, 항모 갑판 맵, 시간대/날씨.
+**Notes**:
+- 검증: `MAP=ocean`(로드), `SWAP=ocean`(라이브) node tests/shot.mjs.

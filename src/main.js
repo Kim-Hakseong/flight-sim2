@@ -2,7 +2,7 @@
 // COORDINATE: Three.js right-handed, +Y up, -Z forward.
 // Body frame: +X right wing, +Y top, -Z nose.
 
-import { buildWorld, RUNWAY_START_Z, MAPS, DEFAULT_MAP } from './world.js';
+import { buildWorld, buildMapContent, RUNWAY_START_Z, MAPS, DEFAULT_MAP } from './world.js';
 import { buildClouds, driftClouds } from './clouds.js';
 import { buildAircraft, AIRCRAFT_MODELS, DEFAULT_MODEL } from './aircraft.js';
 import { initModelPicker, initIntro, initTouchControls, isTouchDevice } from './ui.js';
@@ -115,21 +115,22 @@ const colliders = createColliders();
 const MAP_KEY = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('fs-map')) || DEFAULT_MAP;
 const world = buildWorld(scene, colliders, MAP_KEY);
 const sunLight = world.sun;
+let currentMap = MAP_KEY;
+let mapGroup = world.group;     // swappable scenery group
+let mapWater = world.water;     // animated ocean mesh (or null)
 const cloudField = buildClouds(scene);
 
 // Image-based lighting (M27): prefilter a sky/ground gradient into an environment
-// map so the PBR materials (jet metal, canopy glass) pick up real reflections —
-// the difference between flat plastic and a metallic airframe. Generated once.
-(function setupEnvironment() {
+// map so the PBR materials (jet metal, canopy glass) pick up real reflections.
+// Re-runnable so a map swap (M35) re-tints the reflections to the new biome.
+function regenEnv(ec) {
   try {
+    if (scene.environment) { scene.environment.dispose(); scene.environment = null; }
     const pmrem = new THREE.PMREMGenerator(renderer);
     pmrem.compileEquirectangularShader();
     const envScene = new THREE.Scene();
-    // big sphere, vertical gradient (sky → horizon → ground), seen from inside —
-    // tinted to the active map so reflections match the biome.
     const geo = new THREE.SphereGeometry(50, 32, 16);
     const cols = new Float32Array(geo.attributes.position.count * 3);
-    const ec = world.env || { sky: 0x2a55a8, horizon: 0xc7d6e6, ground: 0x3a4a40 };
     const sky = new THREE.Color(ec.sky), horiz = new THREE.Color(ec.horizon), grnd = new THREE.Color(ec.ground);
     for (let i = 0; i < geo.attributes.position.count; i++) {
       const ny = geo.attributes.position.getY(i) / 50; // -1..1
@@ -140,13 +141,13 @@ const cloudField = buildClouds(scene);
     geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     const envMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide }));
     envScene.add(envMesh);
-    const envTex = pmrem.fromScene(envScene, 0.04).texture;
-    scene.environment = envTex;
+    scene.environment = pmrem.fromScene(envScene, 0.04).texture;
     geo.dispose(); envMesh.material.dispose(); pmrem.dispose();
   } catch (e) {
     console.warn('[env] PMREM environment unavailable:', e && e.message);
   }
-})();
+}
+regenEnv(world.env || { sky: 0x2a55a8, horizon: 0xc7d6e6, ground: 0x3a4a40 });
 
 const effects = createEffects(scene);
 
@@ -247,16 +248,38 @@ function setAircraftModel(key) {
   return true;
 }
 let modelPicker = null;
+let mapPicker = null;
 if (typeof window !== 'undefined') {
   window.setAircraftModel = (key) => { const ok = setAircraftModel(key); if (ok && modelPicker) modelPicker.refresh(); return ok; };
   window.listAircraftModels = () => Object.entries(AIRCRAFT_MODELS)
     .map(([k, v]) => ({ key: k, label: v.label, role: v.role, jet: v.jet }));
   window.__aircraftModel = () => aircraftModel;
-  // Map selection (M34): persist + reload (the world is rebuilt at load).
+  // Map selection (M35): LIVE swap — dispose the scenery group, rebuild for the new
+  // biome, re-tint the persistent lights/fog, regenerate the IBL env, and reset to
+  // the runway. No page reload. The choice is also persisted for next load.
   window.setMap = (key) => {
-    if (MAPS[key] && key !== MAP_KEY) { try { sessionStorage.setItem('fs-map', key); } catch {} location.reload(); }
+    if (!MAPS[key] || key === currentMap) return false;
+    const cfg = MAPS[key];
+    scene.remove(mapGroup);
+    disposeObject(mapGroup);
+    colliders.boxes.length = 0; colliders.cones.length = 0;
+    mapGroup = new THREE.Group(); mapGroup.name = 'mapContent';
+    mapWater = buildMapContent(mapGroup, colliders, cfg, world.sunDir).water;
+    scene.add(mapGroup);
+    world.hemi.color.set(cfg.hemi.sky);
+    world.hemi.groundColor.set(cfg.hemi.ground);
+    world.hemi.intensity = cfg.hemi.intensity;
+    sunLight.color.set(cfg.sky.sun);
+    scene.fog.color.set(cfg.fog.color); scene.fog.near = cfg.fog.near; scene.fog.far = cfg.fog.far;
+    regenEnv(cfg.env);
+    currentMap = key;
+    if (typeof resetAircraft === 'function') resetAircraft();
+    try { sessionStorage.setItem('fs-map', key); } catch {}
+    if (mapPicker) mapPicker.refresh();
+    console.log(`[map] → ${key} (${cfg.label})`);
+    return true;
   };
-  window.__map = () => MAP_KEY;
+  window.__map = () => currentMap;
   // Build the on-screen UI once the DOM is ready: model + map pickers, touch
   // controls (mobile), and the intro/controls popup.
   const buildUI = () => {
@@ -265,9 +288,9 @@ if (typeof window !== 'undefined') {
       () => aircraftModel,
       (key) => window.setAircraftModel(key),
     );
-    initModelPicker(
+    mapPicker = initModelPicker(
       Object.entries(MAPS).map(([k, v]) => ({ key: k, label: v.label, role: v.desc })),
-      () => MAP_KEY,
+      () => currentMap,
       (key) => window.setMap(key),
       { title: '◢ MAP', top: 188 },
     );
@@ -821,6 +844,7 @@ function loop(now) {
   // Tick AI traffic regardless of vehicle / pause state — gives the world life.
   tickTraffic(aiList, dt);
   driftClouds(cloudField, dt);
+  if (mapWater) mapWater.material.uniforms.uTime.value += dt;
 
   // Scenario tick (if active) advances objectives + scores.
   scenario.tickScenario({

@@ -61,14 +61,16 @@ export const MAPS = {
     buildings: 16, mountains: { count: 44, rock: 0x8090a0 },
     env: { sky: 0x4a78b0, horizon: 0xdfeaf2, ground: 0x90a0b0 },
   },
-  coastal: {
-    label: 'Coastal', desc: '해안·구릉',
-    sky: { horizon: 0xbfe0e8, zenith: 0x2f78b8, ground: 0x2a5a6a, sun: 0xfff4d6 },
-    fog: { color: 0xbfe0e8, near: 1800, far: 10000 },
-    terrain: { grass: [0.20, 0.42, 0.40], dirt: [0.32, 0.48, 0.40], rock: [0.40, 0.46, 0.46], snow: [0.90, 0.94, 0.96], scale: 13 },
-    hemi: { sky: 0xdef0ff, ground: 0x335055, intensity: 0.78 },
-    buildings: 30, mountains: { count: 20, rock: 0x4a5a52 },
-    env: { sky: 0x2f78b8, horizon: 0xbfe0e8, ground: 0x335055 },
+  ocean: {
+    label: 'Ocean', desc: '대양·도서',
+    sky: { horizon: 0xbfe0e8, zenith: 0x2f78b8, ground: 0x1a4a5a, sun: 0xfff4d6 },
+    fog: { color: 0xbfe0e8, near: 2500, far: 12000 },
+    terrain: { grass: [0.78, 0.72, 0.52], dirt: [0.72, 0.66, 0.46], rock: [0.50, 0.50, 0.48], snow: [0.92, 0.94, 0.96], scale: 10 },
+    hemi: { sky: 0xdef0ff, ground: 0x244a55, intensity: 0.82 },
+    buildings: 0, mountains: { count: 18, rock: 0x55615a },
+    env: { sky: 0x2f78b8, horizon: 0xbfe0e8, ground: 0x12404e },
+    water: { deep: 0x0a3450, shallow: 0x1f6f8c },  // real animated sea (M35)
+    island: 1500,                                  // sand island radius around the runway
   },
 };
 export const DEFAULT_MAP = 'plains';
@@ -135,16 +137,90 @@ function buildSky(scene, sunDirection, skyCfg = {}) {
   return sky;
 }
 
+// ---------- Animated ocean (M35) ----------
+
+const WATER_VERT = `
+  varying vec3 vWorldPos;
+  void main() {
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vWorldPos = wp.xyz;
+    gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`;
+const WATER_FRAG = `
+  precision highp float;
+  varying vec3 vWorldPos;
+  uniform float uTime;
+  uniform vec3 uDeep, uShallow, uSky, uSun;
+  uniform vec3 uSunDir;
+  vec3 waveNormal(vec2 p) {
+    float t = uTime;
+    vec2 d = vec2(0.0);
+    d += vec2(cos(p.x * 0.060 + t * 1.3), cos(p.y * 0.050 + t * 1.1)) * 0.060;
+    d += vec2(cos(p.x * 0.130 - t * 0.9 + p.y * 0.05), cos(p.y * 0.110 + t * 1.4 + p.x * 0.04)) * 0.030;
+    d += vec2(cos(p.x * 0.270 + t * 2.1), cos(p.y * 0.310 - t * 1.7)) * 0.015;
+    return normalize(vec3(-d.x, 1.0, -d.y));
+  }
+  void main() {
+    vec3 N = waveNormal(vWorldPos.xz);
+    vec3 V = normalize(cameraPosition - vWorldPos);
+    float fres = pow(clamp(1.0 - dot(N, V), 0.0, 1.0), 3.0);
+    vec3 base = mix(uDeep, uShallow, clamp(dot(N, V) * 0.5, 0.0, 0.4));
+    vec3 col = mix(base, uSky, clamp(fres, 0.0, 0.85));
+    vec3 R = reflect(-V, N);
+    float spec = pow(max(dot(R, normalize(uSunDir)), 0.0), 120.0);
+    col += uSun * spec * 1.5;
+    float dist = length(cameraPosition.xz - vWorldPos.xz);
+    col = mix(col, uSky, clamp((dist - 2000.0) / 7000.0, 0.0, 0.85));
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+// Returns the water mesh (its material.uniforms.uTime is advanced each frame).
+function buildWater(parent, cfg, sunDir) {
+  const geo = new THREE.PlaneGeometry(40000, 40000, 1, 1);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uDeep: { value: new THREE.Color(cfg.water.deep) },
+      uShallow: { value: new THREE.Color(cfg.water.shallow) },
+      uSky: { value: new THREE.Color(cfg.sky.horizon) },
+      uSun: { value: new THREE.Color(cfg.sky.sun) },
+      uSunDir: { value: sunDir.clone() },
+    },
+    vertexShader: WATER_VERT,
+    fragmentShader: WATER_FRAG,
+  });
+  const m = new THREE.Mesh(geo, mat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = -0.4;            // just below the island so the shoreline reads
+  m.name = 'water';
+  parent.add(m);
+  return m;
+}
+
+// Flat sand island that carries the runway on an ocean map.
+function buildIsland(parent, radius) {
+  const geo = new THREE.CircleGeometry(radius, 48);
+  const mat = new THREE.MeshLambertMaterial({ color: 0xcdc09a, map: groundDetailTexture() });
+  const isle = new THREE.Mesh(geo, mat);
+  isle.rotation.x = -Math.PI / 2;
+  isle.position.y = 0.0;
+  isle.receiveShadow = true;
+  parent.add(isle);
+}
+
 // ---------- World construction ----------
 
 export function buildWorld(scene, colliders, mapKey = DEFAULT_MAP) {
   const cfg = MAPS[mapKey] || MAPS[DEFAULT_MAP];
   const sunDir = new THREE.Vector3(0.55, 0.7, -0.35).normalize();
 
-  buildSky(scene, sunDir, cfg.sky);
   scene.fog = new THREE.Fog(cfg.fog.color, cfg.fog.near, cfg.fog.far);
 
   // Lights: hemisphere for sky/ground tint + key directional sun + soft fill.
+  // These are PERSISTENT across map swaps (only re-tinted), so the sun reference
+  // main.js holds for the shadow frustum stays valid.
   const hemi = new THREE.HemisphereLight(cfg.hemi.sky, cfg.hemi.ground, cfg.hemi.intensity);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(cfg.sky.sun, 1.05);
@@ -163,12 +239,31 @@ export function buildWorld(scene, colliders, mapKey = DEFAULT_MAP) {
   const fill = new THREE.AmbientLight(0x223344, 0.25);
   scene.add(fill);
 
-  buildGround(scene, cfg.terrain);
-  buildRunway(scene);
-  buildBuildings(scene, colliders, cfg.buildings);
-  buildMountains(scene, colliders, cfg.mountains.count, cfg.mountains.rock);
+  // Swappable scenery (sky/terrain/water/runway/buildings/mountains) in one group
+  // so a live map swap (M35) can dispose + rebuild just this, keeping the lights.
+  const group = new THREE.Group();
+  group.name = 'mapContent';
+  const content = buildMapContent(group, colliders, cfg, sunDir);
+  scene.add(group);
 
-  return { sun, env: cfg.env, mapKey };
+  return { sun, hemi, fill, sunDir, group, water: content.water, env: cfg.env, mapKey };
+}
+
+// Build the swappable scenery for a map into `group`. Returns { water } (the
+// animated ocean mesh, or null on land maps).
+export function buildMapContent(group, colliders, cfg, sunDir) {
+  buildSky(group, sunDir, cfg.sky);
+  let water = null;
+  if (cfg.water) {
+    water = buildWater(group, cfg, sunDir);
+    buildIsland(group, cfg.island || 1500);
+  } else {
+    buildGround(group, cfg.terrain);
+  }
+  buildRunway(group);
+  if (cfg.buildings > 0) buildBuildings(group, colliders, cfg.buildings);
+  buildMountains(group, colliders, cfg.mountains.count, cfg.mountains.rock);
+  return { water };
 }
 
 // Tileable grayscale value-noise for ground detail (modulates the vertex colour).
