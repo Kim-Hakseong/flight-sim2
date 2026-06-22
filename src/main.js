@@ -9,7 +9,7 @@ import { buildCockpit } from './cockpit.js';
 import { buildAircraft, AIRCRAFT_MODELS, DEFAULT_MODEL } from './aircraft.js';
 import { initModelPicker, initIntro, initTouchControls, isTouchDevice } from './ui.js';
 import { createCameraRig, nextMode, updateCamera } from './camera.js';
-import { createControlState, attachKeyboard, tickThrottle } from './controls.js';
+import { createControlState, attachKeyboard, tickThrottle, tickControls, CONTROL_FEEL } from './controls.js';
 import { initHud, updateHud } from './hud.js';
 import { maybeSend, isBridgeOnline, mergeMeasuredIntoTelemetry } from './telemetry.js';
 import * as autopilot from './autopilot.js';
@@ -365,6 +365,9 @@ if (typeof window !== 'undefined') {
   window.listAircraftModels = () => Object.entries(AIRCRAFT_MODELS)
     .map(([k, v]) => ({ key: k, label: v.label, role: v.role, jet: v.jet }));
   window.__aircraftModel = () => aircraftModel;
+  // Keyboard control feel (M42): tune sensitivity live. Lower rampUp / higher expo
+  // = gentler. e.g. window.__ctrlFeel({ rampUp: 1.8, expo: 0.7 }). No args → read.
+  window.__ctrlFeel = (opts) => { if (opts) Object.assign(CONTROL_FEEL, opts); return { ...CONTROL_FEEL }; };
   // Map selection (M35): LIVE swap — dispose the scenery group, rebuild for the new
   // biome, re-tint the persistent lights/fog, regenerate the IBL env, and reset to
   // the runway. No page reload. The choice is also persisted for next load.
@@ -951,6 +954,10 @@ function loop(now) {
 
   if (!controls.paused && sim.status !== 'CRASH' && !manualStep) {
     tickThrottle(controls, dt);
+    // Shape keyboard input (M42): ramp the stick toward the key target + expo, so
+    // manual flight isn't bang-bang. Runs only on the real-time path; the autopilot
+    // (inside stepSimAndControl) overrides these axes when engaged.
+    tickControls(controls, dt);
 
     // Gamepad: per-axis override (only the axes the user is actually pushing,
     // so keyboard remains usable for centered axes / triggers).

@@ -1010,3 +1010,19 @@ summary: Three.js 기반 브라우저 비행 시뮬레이터 — MAVLink/QGround
 - (후속) 야간/우천 시 MFD 자발광 강조, 윈드실드 가시 영역 확대 옵션.
 **Notes**:
 - 표시 전용 → 물리/착륙 불변. 검증: `FLY=6 CAM=cockpit node tests/shot.mjs ...`.
+
+## 2026-06-22 22:20 — M42: 키보드 입력 정형(스무딩+expo)으로 조종 민감도 완화
+
+**Status**: GREEN (194 유닛 통과, 콘솔 0, 착륙 불변 PASS)
+**Files changed**: src/controls.js(입력 램프+expo+tickControls), src/main.js(루프 배선+__ctrlFeel), tests/controls.test.mjs(new)
+**Tests**: 194 통과(신규 6), 콘솔 0, 6 m/s 크로스윈드+2.5 거스트 착륙 PASS(110m)
+**Decisions**:
+- 사용자 질문: "조종이 민감한 게 실제 물리엔진 때문인가, 자동 설정인가?" → 진단: **물리(6-DOF)는 진짜이고 기체는 얌전한 경항공기 튜닝**인데, `controls.js` 키 입력이 **bang-bang(키 누르면 즉시 ±1 풀 타각)** 이라 트위치하게 느껴짐. 액추에이터 지연(25 rad/s)도 거의 즉답이라 완충 안 됨.
+- 물리/검증된 경로를 건드리지 않고 **입력단만 정형**: 키 TARGET(±1) → `tickControls`가 유한 속도로 "스틱"을 램프(rampUp 2.4≈0.4s 풀, rampCenter 5.0≈0.2s 복귀) + **expo 0.55**(중앙 둔감, 스톱에서 풀 권한 유지).
+- **경로 분리**: tickControls는 **실시간 루프(loop)** 의 매뉴얼 분기에서만 호출 → 결정론적 `__advance`(테스트/착륙)와 아날로그(게임패드/터치)·오토파일럿은 우회. 키보드가 해당 축을 "소유"할 때만 기록(릴리스 시 정확히 0으로 복귀, 아날로그 비클로버).
+- 라이브 튜닝 훅 `window.__ctrlFeel({rampUp, rampCenter, expo})` 노출 — 더 둔감하게: rampUp↓/expo↑.
+- TDD: tickControls/expoShape 단위 테스트 6종(탭=부분타각, 홀드=풀, 릴리스=중앙복귀, 아날로그 비클로버, 튜닝 반영).
+**Next**:
+- (후속) 기체별 입력 프로파일(제트 vs 트레이너), 설정 UI 슬라이더.
+**Notes**:
+- 헤드리스에선 rAF 스로틀로 실시간 램프 직접관측 불가 → __advance 결정론 경로 사용(설계대로). 단위 테스트로 정형 검증.
