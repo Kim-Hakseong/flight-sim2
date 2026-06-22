@@ -61,10 +61,11 @@ export const isTouchDevice = (typeof window !== 'undefined') &&
  * @param {(key:string) => void} onSelect
  * @returns {{ refresh: () => void, root: HTMLElement }}
  */
-export function initModelPicker(models, getCurrent, onSelect) {
+export function initModelPicker(models, getCurrent, onSelect, opts = {}) {
   injectStyles();
   const root = el('div', `${NS}-picker`);
-  root.appendChild(el('div', `${NS}-title`, '◢ AIRCRAFT'));
+  if (opts.top != null) root.style.top = opts.top + 'px';
+  root.appendChild(el('div', `${NS}-title`, opts.title || '◢ AIRCRAFT'));
   const optEls = new Map();
   for (const m of models) {
     const o = el('div', `${NS}-opt`);

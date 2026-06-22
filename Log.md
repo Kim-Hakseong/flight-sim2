@@ -856,3 +856,18 @@
 - 터치 버튼행에 "↻ RST" 추가 → controls.onReset()(resetAircraft) 호출. 활주로 시작점으로 리셋(키보드 R과 동일).
 **Next**:
 - M34: 다중 맵 선택.
+
+## 2026-06-22 03:08 — M34: 다중 맵 선택 (바이옴 프리셋)
+
+**Status**: GREEN (4개 맵 렌더 확인, 착륙 불변 PASS)
+**Files changed**: src/world.js(MAPS 레지스트리+파라미터화), src/main.js(맵 적용+피커+setMap), src/ui.js(피커 위치 옵션), tests/shot.mjs(MAP 환경변수)
+**Tests**: 콘솔 0, landing-wind-det 5+2.5 PASS(plains 불변 91m), plains/desert/arctic 스크린샷 확인
+**Decisions**:
+- 맵 4종: **Plains(평원·도시), Desert(사막·메사), Arctic(설원·빙하), Coastal(해안·구릉)**. 각 프리셋이 하늘/안개 색, 지형 색대(grass/dirt/rock/snow)+높이 스케일, 헤미 광원 틴트, 빌딩/산 밀도·색, IBL 환경색을 설정. **활주로는 동일**(자동착륙 항상 동작).
+- world.js를 buildWorld(scene, colliders, mapKey)로 파라미터화(buildSky/buildGround/buildMountains 설정 주입). IBL 환경맵도 맵 색으로 생성.
+- 맵 전환은 **sessionStorage 저장 + 페이지 리로드**(라이브 씬 분해보다 안전·간단; 광원/안개/환경맵 모두 로드 시 재구성). 좌상단 항공기 피커 아래 "◢ MAP" 피커.
+**Next**:
+- (후속) 라이브 맵 스왑(무리로드), 실제 물(바다) 맵, 시간대/날씨.
+**Notes**:
+- 결정론 시드 유지(빌딩/산/구름). 물리/착륙 불변.
+- 검증: `MAP=desert node tests/shot.mjs ...`.

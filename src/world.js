@@ -30,6 +30,49 @@ export const RUNWAY_LENGTH = 2000;
 export const RUNWAY_WIDTH = 60;
 export const RUNWAY_START_Z = RUNWAY_LENGTH / 2 - 50;
 
+// Selectable maps (M34): each is a biome preset — sky/fog/terrain colours, light
+// tint, and obstacle density. The runway is identical across maps (so the autoland
+// always works); only the scenery changes. The chosen map is applied at load.
+export const MAPS = {
+  plains: {
+    label: 'Plains', desc: '평원·도시',
+    sky: { horizon: 0xc7d6e6, zenith: 0x2a55a8, ground: 0x4a6058, sun: 0xfff4d6 },
+    fog: { color: 0xc7d6e6, near: 1500, far: 9500 },
+    terrain: { grass: [0.30, 0.45, 0.20], dirt: [0.45, 0.36, 0.22], rock: [0.42, 0.40, 0.36], snow: [0.92, 0.94, 0.96], scale: 18 },
+    hemi: { sky: 0xe2efff, ground: 0x556644, intensity: 0.7 },
+    buildings: 70, mountains: { count: 35, rock: 0x5a4a3a },
+    env: { sky: 0x2a55a8, horizon: 0xc7d6e6, ground: 0x3a4a40 },
+  },
+  desert: {
+    label: 'Desert', desc: '사막·메사',
+    sky: { horizon: 0xe6d4ad, zenith: 0x5d82bd, ground: 0x8a6a40, sun: 0xfff0c0 },
+    fog: { color: 0xe2cfa6, near: 1200, far: 8200 },
+    terrain: { grass: [0.62, 0.48, 0.28], dirt: [0.72, 0.55, 0.33], rock: [0.55, 0.42, 0.30], snow: [0.82, 0.68, 0.48], scale: 26 },
+    hemi: { sky: 0xfff0d0, ground: 0x8a6a44, intensity: 0.85 },
+    buildings: 22, mountains: { count: 42, rock: 0x8a6a44 },
+    env: { sky: 0x5d82bd, horizon: 0xe6d4ad, ground: 0x8a6a44 },
+  },
+  arctic: {
+    label: 'Arctic', desc: '설원·빙하',
+    sky: { horizon: 0xdfeaf2, zenith: 0x4a78b0, ground: 0x9aa8b0, sun: 0xf0f6ff },
+    fog: { color: 0xdfeaf2, near: 1100, far: 7800 },
+    terrain: { grass: [0.80, 0.86, 0.92], dirt: [0.72, 0.80, 0.88], rock: [0.62, 0.70, 0.80], snow: [0.96, 0.98, 1.0], scale: 30 },
+    hemi: { sky: 0xf0f8ff, ground: 0x90a0b0, intensity: 0.9 },
+    buildings: 16, mountains: { count: 44, rock: 0x8090a0 },
+    env: { sky: 0x4a78b0, horizon: 0xdfeaf2, ground: 0x90a0b0 },
+  },
+  coastal: {
+    label: 'Coastal', desc: '해안·구릉',
+    sky: { horizon: 0xbfe0e8, zenith: 0x2f78b8, ground: 0x2a5a6a, sun: 0xfff4d6 },
+    fog: { color: 0xbfe0e8, near: 1800, far: 10000 },
+    terrain: { grass: [0.20, 0.42, 0.40], dirt: [0.32, 0.48, 0.40], rock: [0.40, 0.46, 0.46], snow: [0.90, 0.94, 0.96], scale: 13 },
+    hemi: { sky: 0xdef0ff, ground: 0x335055, intensity: 0.78 },
+    buildings: 30, mountains: { count: 20, rock: 0x4a5a52 },
+    env: { sky: 0x2f78b8, horizon: 0xbfe0e8, ground: 0x335055 },
+  },
+};
+export const DEFAULT_MAP = 'plains';
+
 // ---------- Procedural sky shader ----------
 
 const SKY_VERT = `
@@ -71,17 +114,17 @@ const SKY_FRAG = `
   }
 `;
 
-function buildSky(scene, sunDirection) {
+function buildSky(scene, sunDirection, skyCfg = {}) {
   const skyGeom = new THREE.SphereGeometry(8000, 24, 16);
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
     uniforms: {
-      horizonColor: { value: new THREE.Color(0xc7d6e6) },
-      zenithColor:  { value: new THREE.Color(0x2a55a8) },
-      groundColor:  { value: new THREE.Color(0x4a6058) },
+      horizonColor: { value: new THREE.Color(skyCfg.horizon ?? 0xc7d6e6) },
+      zenithColor:  { value: new THREE.Color(skyCfg.zenith ?? 0x2a55a8) },
+      groundColor:  { value: new THREE.Color(skyCfg.ground ?? 0x4a6058) },
       sunDirection: { value: sunDirection.clone() },
-      sunColor:     { value: new THREE.Color(0xfff4d6) },
+      sunColor:     { value: new THREE.Color(skyCfg.sun ?? 0xfff4d6) },
     },
     vertexShader: SKY_VERT,
     fragmentShader: SKY_FRAG,
@@ -94,16 +137,17 @@ function buildSky(scene, sunDirection) {
 
 // ---------- World construction ----------
 
-export function buildWorld(scene, colliders) {
+export function buildWorld(scene, colliders, mapKey = DEFAULT_MAP) {
+  const cfg = MAPS[mapKey] || MAPS[DEFAULT_MAP];
   const sunDir = new THREE.Vector3(0.55, 0.7, -0.35).normalize();
 
-  buildSky(scene, sunDir);
-  scene.fog = new THREE.Fog(0xc7d6e6, 1500, 9500);
+  buildSky(scene, sunDir, cfg.sky);
+  scene.fog = new THREE.Fog(cfg.fog.color, cfg.fog.near, cfg.fog.far);
 
   // Lights: hemisphere for sky/ground tint + key directional sun + soft fill.
-  const hemi = new THREE.HemisphereLight(0xe2efff, 0x556644, 0.7);
+  const hemi = new THREE.HemisphereLight(cfg.hemi.sky, cfg.hemi.ground, cfg.hemi.intensity);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff4d6, 1.05);
+  const sun = new THREE.DirectionalLight(cfg.sky.sun, 1.05);
   sun.position.copy(sunDir).multiplyScalar(2000);
   // Shadow map (M30): a tight orthographic frustum that main.js re-centres on the
   // aircraft each frame, so shadows stay crisp without covering the whole world.
@@ -119,12 +163,12 @@ export function buildWorld(scene, colliders) {
   const fill = new THREE.AmbientLight(0x223344, 0.25);
   scene.add(fill);
 
-  buildGround(scene);
+  buildGround(scene, cfg.terrain);
   buildRunway(scene);
-  buildBuildings(scene, colliders, 70);
-  buildMountains(scene, colliders, 35);
+  buildBuildings(scene, colliders, cfg.buildings);
+  buildMountains(scene, colliders, cfg.mountains.count, cfg.mountains.rock);
 
-  return { sun };
+  return { sun, env: cfg.env, mapKey };
 }
 
 // Tileable grayscale value-noise for ground detail (modulates the vertex colour).
@@ -150,12 +194,13 @@ function groundDetailTexture() {
   return t;
 }
 
-function buildGround(scene) {
+function buildGround(scene, terrain = {}) {
   // Multi-octave fractal noise + altitude-banded vertex colors.
   const seg = 140;
   const geom = new THREE.PlaneGeometry(20000, 20000, seg, seg);
   const pos = geom.attributes.position;
   const colors = new Float32Array(pos.count * 3);
+  const heightScale = terrain.scale ?? 18;
 
   function fbm(x, y) {
     let amp = 1, freq = 1, h = 0;
@@ -168,14 +213,14 @@ function buildGround(scene) {
       amp *= 0.5;
       freq *= 2.05;
     }
-    return h * 18;   // overall height scale
+    return h * heightScale;   // overall height scale (per map)
   }
 
-  // Color stops by elevation.
-  const C_GRASS = [0.30, 0.45, 0.20];
-  const C_DIRT  = [0.45, 0.36, 0.22];
-  const C_ROCK  = [0.42, 0.40, 0.36];
-  const C_SNOW  = [0.92, 0.94, 0.96];
+  // Color stops by elevation (per map biome).
+  const C_GRASS = terrain.grass || [0.30, 0.45, 0.20];
+  const C_DIRT  = terrain.dirt  || [0.45, 0.36, 0.22];
+  const C_ROCK  = terrain.rock  || [0.42, 0.40, 0.36];
+  const C_SNOW  = terrain.snow  || [0.92, 0.94, 0.96];
   function lerp(a, b, t) { return a + (b - a) * t; }
   function colorFor(h) {
     if (h < 8)  return C_GRASS;
@@ -311,9 +356,9 @@ function buildBuildings(scene, colliders, count) {
   }
 }
 
-function buildMountains(scene, colliders, count) {
+function buildMountains(scene, colliders, count, rockColor = 0x5a4a3a) {
   const baseGeom = new THREE.ConeGeometry(1, 1, 7);
-  const matRock = new THREE.MeshLambertMaterial({ color: 0x5a4a3a });
+  const matRock = new THREE.MeshLambertMaterial({ color: rockColor });
   const matSnow = new THREE.MeshLambertMaterial({ color: 0xeaeaea });
 
   for (let i = 0; i < count; i++) {

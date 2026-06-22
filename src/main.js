@@ -2,7 +2,7 @@
 // COORDINATE: Three.js right-handed, +Y up, -Z forward.
 // Body frame: +X right wing, +Y top, -Z nose.
 
-import { buildWorld, RUNWAY_START_Z } from './world.js';
+import { buildWorld, RUNWAY_START_Z, MAPS, DEFAULT_MAP } from './world.js';
 import { buildClouds, driftClouds } from './clouds.js';
 import { buildAircraft, AIRCRAFT_MODELS, DEFAULT_MODEL } from './aircraft.js';
 import { initModelPicker, initIntro, initTouchControls, isTouchDevice } from './ui.js';
@@ -110,7 +110,10 @@ if (typeof navigator !== 'undefined' && navigator.xr) {
 
 const scene = new THREE.Scene();
 const colliders = createColliders();
-const world = buildWorld(scene, colliders);
+// Selected map (M34): persisted in sessionStorage, applied on load (a map change
+// reloads the page — far simpler/safer than tearing down the live scene).
+const MAP_KEY = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('fs-map')) || DEFAULT_MAP;
+const world = buildWorld(scene, colliders, MAP_KEY);
 const sunLight = world.sun;
 const cloudField = buildClouds(scene);
 
@@ -122,10 +125,12 @@ const cloudField = buildClouds(scene);
     const pmrem = new THREE.PMREMGenerator(renderer);
     pmrem.compileEquirectangularShader();
     const envScene = new THREE.Scene();
-    // big sphere, vertical gradient (sky → horizon → ground), seen from inside
+    // big sphere, vertical gradient (sky → horizon → ground), seen from inside —
+    // tinted to the active map so reflections match the biome.
     const geo = new THREE.SphereGeometry(50, 32, 16);
     const cols = new Float32Array(geo.attributes.position.count * 3);
-    const sky = new THREE.Color(0x2a55a8), horiz = new THREE.Color(0xc7d6e6), grnd = new THREE.Color(0x3a4a40);
+    const ec = world.env || { sky: 0x2a55a8, horizon: 0xc7d6e6, ground: 0x3a4a40 };
+    const sky = new THREE.Color(ec.sky), horiz = new THREE.Color(ec.horizon), grnd = new THREE.Color(ec.ground);
     for (let i = 0; i < geo.attributes.position.count; i++) {
       const ny = geo.attributes.position.getY(i) / 50; // -1..1
       const c = ny > 0 ? horiz.clone().lerp(sky, Math.min(1, ny * 1.4))
@@ -247,13 +252,24 @@ if (typeof window !== 'undefined') {
   window.listAircraftModels = () => Object.entries(AIRCRAFT_MODELS)
     .map(([k, v]) => ({ key: k, label: v.label, role: v.role, jet: v.jet }));
   window.__aircraftModel = () => aircraftModel;
-  // Build the on-screen UI once the DOM is ready: model picker, touch controls
-  // (mobile), and the intro/controls popup.
+  // Map selection (M34): persist + reload (the world is rebuilt at load).
+  window.setMap = (key) => {
+    if (MAPS[key] && key !== MAP_KEY) { try { sessionStorage.setItem('fs-map', key); } catch {} location.reload(); }
+  };
+  window.__map = () => MAP_KEY;
+  // Build the on-screen UI once the DOM is ready: model + map pickers, touch
+  // controls (mobile), and the intro/controls popup.
   const buildUI = () => {
     modelPicker = initModelPicker(
       window.listAircraftModels(),
       () => aircraftModel,
       (key) => window.setAircraftModel(key),
+    );
+    initModelPicker(
+      Object.entries(MAPS).map(([k, v]) => ({ key: k, label: v.label, role: v.desc })),
+      () => MAP_KEY,
+      (key) => window.setMap(key),
+      { title: '◢ MAP', top: 188 },
     );
     const params = new URLSearchParams(location.search);
     // Touch controls are always created (so the 🕹 toggle works on any device); they

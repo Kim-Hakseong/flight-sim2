@@ -22,6 +22,10 @@ if (mobile) {
   await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
 }
 await send('Page.navigate', { url }); await sleep(2500);
+if (process.env.MAP) {
+  await ev(`(function(){try{sessionStorage.setItem('fs-map','${process.env.MAP}')}catch(e){}location.reload();})()`);
+  await sleep(2800);
+}
 if (model) { await ev(`window.setAircraftModel('${model}')`); await sleep(800); }
 if (process.env.FLY) {
   // Real-time flight so the RAF loop keeps rendering (unlike __advance which freezes it).
