@@ -5,6 +5,7 @@
 import { buildWorld, buildMapContent, RUNWAY_START_Z, MAPS, DEFAULT_MAP, CONDITIONS, DEFAULT_CONDITION } from './world.js';
 import { buildClouds, driftClouds, setCloudStyle } from './clouds.js';
 import { buildStars, buildMoon, setNightSky, buildPrecip, updatePrecip } from './weather.js';
+import { buildCockpit } from './cockpit.js';
 import { buildAircraft, AIRCRAFT_MODELS, DEFAULT_MODEL } from './aircraft.js';
 import { initModelPicker, initIntro, initTouchControls, isTouchDevice } from './ui.js';
 import { createCameraRig, nextMode, updateCamera } from './camera.js';
@@ -129,6 +130,24 @@ const stars = buildStars(); scene.add(stars);
 const moon = buildMoon(); scene.add(moon);
 const precip = buildPrecip(); scene.add(precip.rain); scene.add(precip.snow);
 let precipMode = null;
+// Cockpit interior (M39): a 3D panel shown only in the V (cockpit) view. It is
+// pinned to the SMOOTHED camera (fixed in the view, no jitter) — the world tilts
+// behind it like a real cockpit. Body origin sits at -COCKPIT_OFFSET from the eye.
+const cockpitInterior = buildCockpit(); scene.add(cockpitInterior);
+const _ckOff = new THREE.Vector3();
+function updateCockpit() {
+  const show = camRig.mode === 'cockpit' && vehicleType === 'plane' && !isReplaying(recorder);
+  cockpitInterior.visible = show;
+  // Hide the exterior airframe in the cockpit view — otherwise the camera (inside
+  // the solid fuselage) only sees its interior and the panel is occluded.
+  aircraft.visible = !show;
+  if (!show) return;
+  cockpitInterior.quaternion.copy(camera.quaternion);
+  // Body origin relative to the eye. Raised a touch (-0.40 vs the true -0.62) so the
+  // panel + MFDs sit prominently in the lower half of the view, like a real cockpit.
+  _ckOff.set(0, -0.40, 1.15).applyQuaternion(camera.quaternion);
+  cockpitInterior.position.copy(camera.position).add(_ckOff);
+}
 
 // Apply a time-of-day / weather condition on top of the active map (M37). Sets
 // the sun (direction = time of day), hemisphere/ambient light, fog, sky tint,
@@ -874,6 +893,7 @@ function loop(now) {
     if (aircraft.userData.prop) aircraft.userData.prop.rotation.z += dt * 30; // visual idle spin
     tickEffects(effects, dt);
     updateCamera(camera, getActiveVehicleMesh(), camRig, dt);
+    updateCockpit();
     pushHud();
     renderScene();
     
@@ -892,6 +912,7 @@ function loop(now) {
     emitOngoingEffects(now);
     tickEffects(effects, dt);
     updateCamera(camera, getActiveVehicleMesh(), camRig, dt);
+    updateCockpit();
     pushHud();
     renderScene();
     
@@ -979,6 +1000,7 @@ function loop(now) {
   emitOngoingEffects(now);
   tickEffects(effects, dt);
   updateCamera(camera, getActiveVehicleMesh(), camRig, dt);
+    updateCockpit();
 
   // Audio: continuous channels follow the live sim state.
   audio.setEngine(controls.throttle, sim.damage.engine);
