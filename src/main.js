@@ -4,6 +4,7 @@
 
 import { buildWorld, buildMapContent, RUNWAY_START_Z, MAPS, DEFAULT_MAP, CONDITIONS, DEFAULT_CONDITION } from './world.js';
 import { buildClouds, driftClouds, setCloudStyle } from './clouds.js';
+import { buildStars, buildMoon, setNightSky, buildPrecip, updatePrecip } from './weather.js';
 import { buildAircraft, AIRCRAFT_MODELS, DEFAULT_MODEL } from './aircraft.js';
 import { initModelPicker, initIntro, initTouchControls, isTouchDevice } from './ui.js';
 import { createCameraRig, nextMode, updateCamera } from './camera.js';
@@ -122,6 +123,12 @@ let mapSky = world.skyMat;      // sky shader material (re-tinted by conditions)
 const COND_KEY = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('fs-cond')) || DEFAULT_CONDITION;
 let currentCond = CONDITIONS[COND_KEY] ? COND_KEY : DEFAULT_CONDITION;
 const cloudField = buildClouds(scene);
+// Night sky + precipitation (M38). Stars/moon fade in with the condition; rain/snow
+// follow the camera. All persistent; driven by applyLighting + the loop.
+const stars = buildStars(); scene.add(stars);
+const moon = buildMoon(); scene.add(moon);
+const precip = buildPrecip(); scene.add(precip.rain); scene.add(precip.snow);
+let precipMode = null;
 
 // Apply a time-of-day / weather condition on top of the active map (M37). Sets
 // the sun (direction = time of day), hemisphere/ambient light, fog, sky tint,
@@ -167,6 +174,8 @@ function applyLighting(mapCfg, condKey) {
     mapWater.material.uniforms.uDeep.value.multiplyScalar(1); // (kept; deep stays biome)
   }
   if (cond.cloud) setCloudStyle(cloudField, cond.cloud.opacity, cond.cloud.color);
+  setNightSky(stars, moon, cond.stars ?? 0);   // stars/moon for night/dusk
+  precipMode = cond.precip || null;             // rain/snow (driven in the loop)
   // Reflections (IBL) re-tinted to the final sky.
   regenEnv({ sky: zn.getHex(), horizon: hz.getHex(), ground: gd.getHex() });
 }
@@ -910,6 +919,7 @@ function loop(now) {
   // Tick AI traffic regardless of vehicle / pause state — gives the world life.
   tickTraffic(aiList, dt);
   driftClouds(cloudField, dt);
+  updatePrecip(precip, camera, dt, precipMode);
   if (mapWater) mapWater.material.uniforms.uTime.value += dt;
 
   // Scenario tick (if active) advances objectives + scores.

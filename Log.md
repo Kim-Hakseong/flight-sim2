@@ -914,3 +914,17 @@
 - (후속) 별/달(야간), 비/눈 파티클, 번개(폭풍).
 **Notes**:
 - 물리/착륙 무관(표시·조명만). 시드 유지. 검증: `COND=night node tests/shot.mjs ...`.
+
+## 2026-06-22 19:35 — M38: 야간 별/달 + 비·눈 파티클
+
+**Status**: GREEN (별/달·비·눈 렌더 확인, 착륙 불변 PASS)
+**Files changed**: src/weather.js(new), src/world.js(CONDITIONS에 stars/precip + Rain/Snow 2종), src/main.js(별/달/강수 배선)
+**Tests**: 188 통과, 콘솔 0, day 착륙 불변 91m, night/rain/snow 스크린샷 확인
+**Decisions**:
+- weather.js: **별(상반구 포인트필드 1700, 시드)** + **달(글로우 스프라이트, 블룸 부각)** — applyLighting의 cond.stars로 페이드(night 1.0·dusk 0.22·그외 0). **강수(rain/snow Points)**: 카메라 추종 박스(±260)서 낙하·재활용, rain은 빠른 청회색 점, snow는 느린 흰 플레이크+드리프트.
+- 컨디션 2종 추가: **Rain(비)·Snow(눈)** — 각자 조명(흐림 계열)+precip 플래그. TIME/WX 피커 5→7종.
+- applyLighting에서 setNightSky+precipMode 설정, 루프에서 updatePrecip(camera 추종).
+**Next**:
+- M39: 조종석 인테리어 뷰(V) — 레퍼런스풍 계기판/글레어실드/MFD.
+**Notes**:
+- 표시 전용 → 물리/착륙 불변. 검증: `COND=rain FLY=12 node tests/shot.mjs ...`.
