@@ -141,9 +141,9 @@ let precipMode = null;
 const cockpitInterior = buildCockpit(); scene.add(cockpitInterior);
 if (typeof window !== 'undefined') {
   window.__ckStick = (bx, by, bz, s = 1) => {
-    const st = cockpitInterior.userData.stick;
-    if (st) { st.position.set(bx, by, bz); st.scale.setScalar(s); }
-    return st ? st.position.toArray().concat(s) : null;
+    const a = cockpitInterior.userData.assembly;
+    if (a) { a.position.set(bx, by, bz); a.scale.setScalar(s); }
+    return a ? a.position.toArray().concat(s) : null;
   };
   window.__ckCoam = (y, z) => {
     const c = cockpitInterior.userData.coam, l = cockpitInterior.userData.lip;

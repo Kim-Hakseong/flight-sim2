@@ -34,28 +34,73 @@ export function buildCockpit() {
     g.add(r);
   }
 
-  // --- Centre flight-control stick. Built on a pivot Group whose origin is the
-  // base hinge; updateCockpit() rotates it with the control command so the grip
-  // tips forward/back (pitch) and left/right (roll) like a real inceptor. ---
+  // --- Centre flight-control stick: a stylised HOTAS (Thrustmaster-like). A fixed
+  // base console (plate + rim + gimbal ring) holds a tilting stick (rubber boot +
+  // flattened grip + a WIDE button head, deliberately wider than the shaft so the
+  // silhouette reads as a joystick, not a column). `assembly` positions/scales the
+  // whole thing; `stick` is the part updateCockpit() tilts with the command. ---
+  const silver = new THREE.MeshStandardMaterial({ color: 0xb9bdc4, metalness: 0.45, roughness: 0.42 });
+  const black  = new THREE.MeshStandardMaterial({ color: 0x121317, metalness: 0.3, roughness: 0.62 });
+  const orangeMat = new THREE.MeshStandardMaterial({ color: 0xe07d1c, emissive: 0x3a1c00, roughness: 0.5 });
+  const cyanMat   = new THREE.MeshStandardMaterial({ color: 0x2bb6c8, emissive: 0x06343a, roughness: 0.5 });
+
+  const assembly = new THREE.Group();
+  assembly.position.set(0, -0.82, -0.55);
+  assembly.scale.setScalar(0.95);
+
+  // base console: octagonal plate + silver rim + glowing gimbal ring + a few buttons
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.05, 8), black);
+  plate.position.y = 0.0; plate.rotation.y = Math.PI / 8; assembly.add(plate);
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.225, 0.014, 8), silver);
+  rim.position.y = 0.028; rim.rotation.y = Math.PI / 8; assembly.add(rim);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.013, 8, 20), orangeMat);
+  ring.position.y = 0.05; ring.rotation.x = Math.PI / 2; assembly.add(ring);
+  // console buttons (HOTAS flavour): orange + cyan squares near the front corners
+  for (const [bx, bz, mat] of [[-0.13, 0.1, orangeMat], [-0.13, 0.04, cyanMat], [0.13, 0.1, cyanMat], [0.13, 0.04, orangeMat]]) {
+    const btn = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.016, 0.035), mat);
+    btn.position.set(bx, 0.03, bz); assembly.add(btn);
+  }
+
+  // tilting stick (pivot at the gimbal centre)
   const stick = new THREE.Group();
-  stick.position.set(0, -0.7, -0.58);   // base hinge: lower centre, between the knees
-  stick.scale.setScalar(1.2);           // sized to read clearly without blocking the horizon
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.085, 0.055, 14), metal);
-  base.position.y = 0.028; stick.add(base);
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.026, 0.32, 10), metal);
-  shaft.position.y = 0.2; stick.add(shaft);
-  // grip head, angled slightly toward the pilot
-  const grip = new THREE.Group(); grip.position.y = 0.36; grip.rotation.x = -0.2;
-  const gripBody = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.038, 0.16, 12), gripMat);
-  grip.add(gripBody);
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.036, 12, 8), gripMat); cap.position.y = 0.085; grip.add(cap);
-  const hat = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.012, 0.022), metal); hat.position.set(0, 0.055, 0.026); grip.add(hat);
-  const trigger = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.045, 0.012),
-    new THREE.MeshStandardMaterial({ color: 0xa83232, roughness: 0.5 }));
-  trigger.position.set(0, -0.02, 0.036); grip.add(trigger);
+  stick.position.set(0, 0.05, 0);
+  // rubber boot / gaiter (widens at the base)
+  const boot = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.085, 0.09, 14), black);
+  boot.position.y = 0.05; stick.add(boot);
+  // short metal neck
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.032, 0.1, 12), silver);
+  neck.position.y = 0.14; stick.add(neck);
+  // flattened ergonomic grip (wider in X, deeper in Z than a cylinder → not phallic)
+  const grip = new THREE.Group(); grip.position.y = 0.32; grip.rotation.x = -0.1;
+  const gripCore = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.26, 0.14), gripMat);
+  grip.add(gripCore);
+  const gripFront = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.22, 0.02), silver);
+  gripFront.position.z = 0.075; grip.add(gripFront);
+  const trigger = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.06, 0.018),
+    new THREE.MeshStandardMaterial({ color: 0x1a1b1f, roughness: 0.55 }));
+  trigger.position.set(0, -0.05, 0.082); grip.add(trigger);
   stick.add(grip);
-  g.add(stick);
+  // WIDE button head on top, tilted toward the pilot — the key anti-phallic shape
+  const head = new THREE.Group(); head.position.set(0, 0.48, -0.01); head.rotation.x = -0.62;
+  const headPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.105, 0.045, 18), silver);
+  headPlate.rotation.x = Math.PI / 2; head.add(headPlate);
+  const headTrim = new THREE.Mesh(new THREE.TorusGeometry(0.105, 0.01, 8, 22), black);
+  head.add(headTrim);
+  // controls on the head face (front = +Z of the head group): orange buttons, hat, thumb
+  const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.02, 8), black);
+  hat.rotation.x = Math.PI / 2; hat.position.set(0, 0.045, 0.024); head.add(hat);
+  for (const hx of [-0.055, 0.055]) {
+    const ob = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.016, 12), orangeMat);
+    ob.rotation.x = Math.PI / 2; ob.position.set(hx, -0.03, 0.024); head.add(ob);
+  }
+  const thumb = new THREE.Mesh(new THREE.SphereGeometry(0.016, 10, 8), black);
+  thumb.position.set(0, -0.005, 0.03); head.add(thumb);
+  stick.add(head);
+
+  assembly.add(stick);
+  g.add(assembly);
   g.userData.stick = stick;
+  g.userData.assembly = assembly;
   g.userData.coam = coam;
   g.userData.lip = lip;
 
