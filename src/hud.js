@@ -41,6 +41,11 @@ function resizeOverlay() {
 const HUD_GREEN = '#3dff9a';
 const HUD_DIM = 'rgba(61,255,154,0.5)';
 
+// Engineering view (M45): kills the neon glow so the HUD reads as flat flight-test
+// symbology instead of a game overlay. Toggled from main.js.
+let engMode = false;
+export function setHudEngMode(v) { engMode = !!v; }
+
 function setDmgBar(el, hp) {
   if (!el) return;
   const pct = Math.max(0, Math.min(1, hp));
@@ -153,8 +158,8 @@ function drawHUD(state) {
   ctx.strokeStyle = HUD_GREEN;
   ctx.fillStyle = HUD_GREEN;
   ctx.font = `${Math.round(13 * S)}px ui-monospace, Menlo, monospace`;
-  ctx.shadowColor = 'rgba(61,255,154,0.5)';
-  ctx.shadowBlur = 4 * S;
+  ctx.shadowColor = engMode ? 'transparent' : 'rgba(61,255,154,0.5)';
+  ctx.shadowBlur = engMode ? 0 : 4 * S;
 
   // ---- Pitch ladder (clipped to a central band, rolls with the aircraft) ----
   ctx.save();
@@ -202,7 +207,7 @@ function drawHUD(state) {
   ctx.restore();
 
   // ---- Boresight (fixed gun cross / waterline) ----
-  ctx.shadowBlur = 5 * S;
+  ctx.shadowBlur = engMode ? 0 : 5 * S;
   ctx.lineWidth = 2 * S;
   ctx.beginPath();
   ctx.moveTo(cx - 34 * S, cy); ctx.lineTo(cx - 12 * S, cy);

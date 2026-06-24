@@ -1055,3 +1055,18 @@ summary: Three.js 기반 브라우저 비행 시뮬레이터 — MAVLink/QGround
 - (후속) 기체별 기본 민감도, 비행 중 항상 보이는 작은 셀렉터(옵션).
 **Notes**:
 - 표시/입력 전용 → 물리/착륙 불변. 검증: 모달 스크린샷 + window.__sensitivity/__ctrlFeel.
+
+## 2026-06-24 — M45: 엔지니어링/HILS 플라이트-테스트 벤치 뷰 (게임틱 → 개발용)
+
+**Status**: GREEN (엔지니어링 콘솔 라이브 데이터+폴트주입+토글 확인, 194 통과, 콘솔 0, 착륙 불변)
+**Files changed**: src/engineering.js(new), src/main.js(그래픽 토글+그리드/축+콘솔 배선), src/hud.js(글로우 off), src/ui.js(키 도움말), index.html(eng-mode CSS)
+**Tests**: 194 통과, 콘솔 0, 6 m/s+2.5 거스트 착륙 PASS(110m, 불변)
+**Decisions**:
+- 피드백 "점점 게임처럼 됨" → **엔지니어링 뷰**를 기본값으로 추가(가역적, 'B'/`window.__engView`로 시네마틱 전환, localStorage 영속).
+- **그래픽 톤다운**: 블룸 strength 0, ACES→NoToneMapping+노출 1.0(머티리얼 needsUpdate 재컴파일), 레퍼런스 **그리드 + 월드/바디 축 트라이어드** 추가, HUD 네온 글로우 제거(hud.js shadowBlur 0, DOM text-shadow 제거).
+- **HILS 콘솔**(우측 도킹, src/engineering.js): 6-DOF 상태벡터(pos/vel/att/rate), AERO/LOADS(α/β/q̄/n/VS/M), **컨트롤 서피스 바**(ele/ail/rud/thr/flp), NAV/ESTIMATOR(소스/NIS/GPS residual/degraded), **폴트 주입 버튼 8종 + CLEAR**, **롤링 스트립차트 3종**(att/rate/surface). 매 프레임 pushHud에서 텔레메트리 push.
+- 표시 전용 → 물리/착륙/결정론 경로 불변(__advance는 콘솔 갱신 안 함).
+**Next**:
+- (제안) 레코드/리플레이 타임라인 스크러버, 센서 truth-vs-measured 오버레이 차트, 파라미터 인스펙터, 시나리오 pass/fail 리포트, CSV 내보내기 UI 버튼, 단위/축약 토글.
+**Notes**:
+- 검증: `window.__engView()`, `.eng-panel`, 폴트버튼→`window.__hils.faults`. 그리드는 고고도/클리어 지형에서 더 잘 보임.

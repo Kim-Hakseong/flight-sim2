@@ -130,6 +130,17 @@
     #hud-damage .fill.warn   { background: #aaffcc; }
     #hud-damage .fill.danger { background: #ff5050; }
 
+    /* Engineering / HILS bench mode (M45): kill the neon glow and clear the
+       right-docked console. Toggled by `body.eng-mode` from main.js. */
+    body.eng-mode #hud { text-shadow: none; }
+    body.eng-mode #hud-bottom, body.eng-mode .hud-tape,
+    body.eng-mode #hud-heading { background: rgba(6,10,14,0.55); border-color: rgba(110,179,216,0.55); }
+    body.eng-mode #hud-damage, body.eng-mode #hud-qgc { right: 300px; }
+    body.eng-mode #hud-help { display: none; }
+    @media (max-width: 940px) {
+      body.eng-mode #hud-damage, body.eng-mode #hud-qgc { right: 178px; }
+    }
+
     /* Mobile (incl. landscape phones): shrink panels, lift the data strip clear
        of the touch joystick/throttle. */
     @media (max-width: 940px) {

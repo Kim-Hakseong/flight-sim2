@@ -10,7 +10,8 @@ import { buildAircraft, AIRCRAFT_MODELS, DEFAULT_MODEL } from './aircraft.js';
 import { initModelPicker, initIntro, initTouchControls, isTouchDevice } from './ui.js';
 import { createCameraRig, nextMode, updateCamera } from './camera.js';
 import { createControlState, attachKeyboard, tickThrottle, tickControls, CONTROL_FEEL } from './controls.js';
-import { initHud, updateHud } from './hud.js';
+import { initHud, updateHud, setHudEngMode } from './hud.js';
+import { initEngineering } from './engineering.js';
 import { maybeSend, isBridgeOnline, mergeMeasuredIntoTelemetry } from './telemetry.js';
 import * as autopilot from './autopilot.js';
 import { connect as connectMissionLink } from './missionLink.js';
@@ -332,6 +333,49 @@ let aircraftModel = DEFAULT_MODEL;
 enableShadows(aircraft);
 scene.add(aircraft);
 
+// ---------- Engineering / HILS bench view (M45) ----------
+// A reversible "engineering" layer: a CAD/ground-station look (reference grid +
+// world/body axis triads, flat tonemapping, no bloom glow) plus the data console.
+// Toggle with 'B' or window.__engView(); persisted. Default ON — the sim presents
+// as a flight-test bench, not a game; switch off for the cinematic look.
+const refGrid = new THREE.GridHelper(16000, 80, 0x2c4250, 0x1c2c36);
+refGrid.position.y = 0.05; scene.add(refGrid);
+const worldAxes = new THREE.AxesHelper(60); worldAxes.position.y = 0.1; scene.add(worldAxes);
+const bodyAxes = new THREE.AxesHelper(9); scene.add(bodyAxes);   // synced to the aircraft each frame
+
+const eng = (typeof document !== 'undefined') ? initEngineering({
+  injectFault: (target, spec) => { hilsFaults[target] = spec || null; },
+  clearFaults: () => { for (const k of Object.keys(hilsFaults)) delete hilsFaults[k]; },
+  getFaults: () => hilsFaults,
+}) : null;
+
+let engView = true;
+function applyEngView(on) {
+  engView = !!on;
+  if (bloomPass) bloomPass.strength = on ? 0.0 : 0.35;
+  renderer.toneMapping = on ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = on ? 1.0 : 1.15;
+  // toneMapping is a shader #define → recompile materials so the change takes hold.
+  scene.traverse((o) => {
+    if (!o.material) return;
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; });
+  });
+  refGrid.visible = on; worldAxes.visible = on; bodyAxes.visible = on;
+  if (eng) eng.setVisible(on);
+  setHudEngMode(on);
+  if (typeof document !== 'undefined') document.body.classList.toggle('eng-mode', on);
+  try { localStorage.setItem('fs-engview', on ? '1' : '0'); } catch { /* private mode */ }
+}
+if (typeof window !== 'undefined') {
+  window.__engView = (on) => { if (on != null) applyEngView(on); return engView; };
+  let saved = '1';
+  try { saved = localStorage.getItem('fs-engview') ?? '1'; } catch { /* */ }
+  applyEngView(saved !== '0');
+  window.addEventListener('keydown', (e) => {
+    if (e.key && e.key.toLowerCase() === 'b' && !e.repeat) applyEngView(!engView);
+  });
+}
+
 // Swap the aircraft 3D model at runtime (model picker / window.setAircraftModel).
 // Disposes the old meshes, rebuilds, re-adds, and resets to the runway so the new
 // jet starts cleanly. The sim physics are model-agnostic (mass/aero unchanged here).
@@ -539,6 +583,7 @@ let navEstimate = null;                    // { estimated, measured } autopilot 
 let navDegraded = false;                   // FDE: GPS measurements being rejected
 let navDegradedHold = 0;                   // frames to hold the warning (hysteresis)
 let gpsRejectStreak = 0;                    // consecutive rejected frames → sustained fault
+let simTime = 0;                            // mission-elapsed clock (engineering bench)
 
 // Atmospheric wind (M22): aerodynamics use (velocity − wind). Default calm.
 //   setWind(eastMps, northMps, gustMps)  e.g. setWind(8, 0, 4) = 8 m/s crosswind + gusts
@@ -798,6 +843,7 @@ function resetAircraft() {
   sim.flaps = 0; sim.spoilers = 0;
   kfX = createKF(sim.position.x); kfZ = createKF(sim.position.z); kfY = createKF(0);
   navEstimate = null; measured = {}; navDegraded = false; navDegradedHold = 0; gpsRejectStreak = 0;
+  simTime = 0;
   sim.status = 'OK';
   sim.vsi = 0;
   sim.gForce = 1.0;
@@ -816,6 +862,7 @@ function syncMesh() {
   const m = vehicleType === 'drone' && droneMesh ? droneMesh : aircraft;
   m.position.copy(sim.position);
   m.quaternion.copy(sim.orientation);
+  if (bodyAxes && bodyAxes.visible) { bodyAxes.position.copy(sim.position); bodyAxes.quaternion.copy(sim.orientation); }
 }
 
 function getActiveVehicleMesh() {
@@ -1183,6 +1230,7 @@ function emitOngoingEffects(now) {
 }
 
 function stepPhysics(dt) {
+  simTime += dt;   // mission-elapsed clock for the engineering bench (M45)
   // --- 1. Aerodynamic state from the current orientation ---
   // (body axes BEFORE this step's rotation; forces below recompute them after.)
   tmpForward.set(0, 0, -1).applyQuaternion(sim.orientation);
@@ -1613,6 +1661,32 @@ function pushHud() {
     missionSeq: apActive ? apSeq : -1,
   };
   maybeSend(mergeMeasuredIntoTelemetry(truthTelemetry, measured), performance.now());
+
+  // Engineering bench console (M45): push the live 6-DOF state, surfaces, nav and
+  // fault state. Skipped entirely when the console is hidden (cinematic view).
+  if (eng && eng.isVisible()) {
+    const R2D = 180 / Math.PI;
+    const vRel = _airVel.copy(sim.velocity).sub(currentWind);
+    const vRelLen = vRel.length();
+    const qbar = 0.5 * airDensity(Math.max(0, altitude)) * vRelLen * vRelLen;
+    const betaRad = sim.velocity.length() > 1 ? sideslipAngle(sim.velocity, fwd, _hudRight) : 0;
+    const gpsErr = (measured && measured.gpsX !== undefined)
+      ? Math.hypot(measured.gpsX - sim.position.x, measured.gpsZ - sim.position.z) : null;
+    const nis = kfX ? Math.max(kfX.nis || 0, kfZ.nis || 0) : null;
+    eng.update({
+      t: simTime,
+      pos: sim.position, vel: sim.velocity, alt: altitude, spd: sim.velocity.length(),
+      roll: sim.euler.z * R2D, pitch: sim.euler.x * R2D, yaw: headingDeg,
+      p: -sim.omega.z * R2D, q: sim.omega.x * R2D, r: sim.omega.y * R2D,
+      aoa: (sim._aoa || 0) * R2D, beta: betaRad * R2D,
+      qbar, g: sim.gForce, vsi: sim.vsi, mach: vRelLen / 340.3,
+      act: {
+        elevator: sim.actuators.elevator, aileron: sim.actuators.aileron, rudder: sim.actuators.rudder,
+        throttle: controls.throttle, flaps: sim.flaps || 0,
+      },
+      navSource, nis, gpsErr, navDegraded, faults: hilsFaults,
+    });
+  }
 }
 
 // Loop is driven by renderer.setAnimationLoop so WebXR sessions tick on the
