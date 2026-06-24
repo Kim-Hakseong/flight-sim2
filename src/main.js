@@ -134,50 +134,39 @@ let precipMode = null;
 // Cockpit interior (M39): a 3D panel shown only in the V (cockpit) view. It is
 // pinned to the SMOOTHED camera (fixed in the view, no jitter) — the world tilts
 // behind it like a real cockpit. Body origin sits at -COCKPIT_OFFSET from the eye.
+// Simple open cockpit (M46): a minimal coaming + canopy rails + a centre control
+// stick. Authored eye-relative; placed at the camera each frame so it banks with
+// the view while the windscreen stays wide open. The stick deflects with the
+// control command (manual or autopilot) for a live inceptor.
 const cockpitInterior = buildCockpit(); scene.add(cockpitInterior);
-// Textured glTF cockpit (M41): a real glass flight-deck — "Cockpit control center"
-// by Google (CC-BY). The model is anchored at the pilot EYE point so the camera
-// sits in the seat: MFD glass panels below, windshield ahead (world shows through),
-// overhead switch panel up top. Tunable live via window.__ckSet, then baked here.
-// f.eye is the pilot eye in model space; f.scale converts model-units -> metres
-// (life-size); model forward (-Z) already aligns with the view forward (-Z).
-const COCKPIT_FIT = { scale: 0.30, eye: [0, 4.58, 2.3], rot: [0, 0, 0], off: [0, -0.05, 0.05] };
-if (typeof THREE.GLTFLoader === 'function') {
-  new THREE.GLTFLoader().load('assets/cockpit.glb', (gltf) => {
-    const model = gltf.scene;
-    model.traverse((c) => { if (c.isMesh) { c.castShadow = false; c.receiveShadow = false; if (c.material) c.material.fog = true; } });
-    const f = COCKPIT_FIT;
-    const wrap = new THREE.Group(); wrap.add(model);
-    const apply = () => {
-      model.position.set(-f.eye[0], -f.eye[1], -f.eye[2]);   // eye anchor -> origin
-      wrap.scale.setScalar(f.scale);
-      wrap.rotation.set(f.rot[0], f.rot[1], f.rot[2]);
-      wrap.position.set(f.off[0], f.off[1], f.off[2]);
-    };
-    apply();
-    while (cockpitInterior.children.length) cockpitInterior.remove(cockpitInterior.children[0]);
-    cockpitInterior.add(wrap);
-    window.__ckSet = (scale, ex, ey, ez, rx, ry, rz, ox, oy, oz) => {
-      Object.assign(f, { scale, eye: [ex, ey, ez], rot: [rx, ry, rz], off: [ox, oy, oz] }); apply();
-    };
-    window.__ckGet = () => JSON.parse(JSON.stringify(f));
-    console.log('[cockpit] glTF flight-deck loaded');
-  }, undefined, (e) => console.warn('[cockpit] glTF load failed:', e && e.message));
+if (typeof window !== 'undefined') {
+  window.__ckStick = (bx, by, bz, s = 1) => {
+    const st = cockpitInterior.userData.stick;
+    if (st) { st.position.set(bx, by, bz); st.scale.setScalar(s); }
+    return st ? st.position.toArray().concat(s) : null;
+  };
+  window.__ckCoam = (y, z) => {
+    const c = cockpitInterior.userData.coam, l = cockpitInterior.userData.lip;
+    if (c) c.position.set(0, y, z);
+    if (l) l.position.set(0, y + 0.05, z + 0.19);
+  };
 }
 function updateCockpit() {
-  const force = typeof window !== 'undefined' && window.__ckForce;  // debug: inspect the model
-  const show = force || (camRig.mode === 'cockpit' && vehicleType === 'plane' && !isReplaying(recorder));
+  const show = camRig.mode === 'cockpit' && vehicleType === 'plane' && !isReplaying(recorder);
   cockpitInterior.visible = show;
   // Hide the exterior airframe in the cockpit view — otherwise the camera (inside
-  // the solid fuselage) only sees its interior and the panel is occluded.
-  aircraft.visible = force ? false : !show;
+  // the solid fuselage) only sees its interior and the view is occluded.
+  aircraft.visible = !show;
   if (!show) return;
-  if (force) { cockpitInterior.position.copy(aircraft.position); cockpitInterior.quaternion.identity(); return; }
-  // The model is anchored at the pilot eye, so place it right at the camera eye and
-  // orient it with the camera — the seat moves with the head, world shows through
-  // the windshield, and the panel banks with the aircraft like a real cockpit.
   cockpitInterior.quaternion.copy(camera.quaternion);
   cockpitInterior.position.copy(camera.position);
+  const stick = cockpitInterior.userData.stick;
+  if (stick) {
+    // Pull back (pitch+) tips the grip toward the pilot (+rot.x); roll-right tips
+    // it right (-rot.z). Reflects the actual command, so the AP moves it too.
+    stick.rotation.x = (controls.pitch || 0) * 0.33;
+    stick.rotation.z = -(controls.roll || 0) * 0.33;
+  }
 }
 
 // Apply a time-of-day / weather condition on top of the active map (M37). Sets

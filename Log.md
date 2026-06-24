@@ -1070,3 +1070,17 @@ summary: Three.js 기반 브라우저 비행 시뮬레이터 — MAVLink/QGround
 - (제안) 레코드/리플레이 타임라인 스크러버, 센서 truth-vs-measured 오버레이 차트, 파라미터 인스펙터, 시나리오 pass/fail 리포트, CSV 내보내기 UI 버튼, 단위/축약 토글.
 **Notes**:
 - 검증: `window.__engView()`, `.eng-panel`, 폴트버튼→`window.__hils.faults`. 그리드는 고고도/클리어 지형에서 더 잘 보임.
+
+## 2026-06-24 — M46: 조종석 간소화 + 전방 시야 개방 + 가운데 컨트롤 스틱
+
+**Status**: GREEN (전방 개방 + 중앙 스틱 + 입력 연동 디플렉션 확인, 194 통과, 콘솔 0, 착륙 불변)
+**Files changed**: src/cockpit.js(재작성), src/main.js(glTF 로더 제거+스틱 애니), src/ui.js(크레딧 제거), index.html(GLTFLoader 스크립트 제거), CREDITS.md, assets/cockpit.glb(삭제)
+**Tests**: 194 통과, 콘솔 0, 6 m/s+2.5 거스트 착륙 PASS(110m, 불변)
+**Decisions**:
+- 피드백 "V 조종석 앞이 여전히 안 보임 + 더 간소화 + 가운데 운전대" → **글래스 플라이트덱 glTF 폐기**(전방 가림). 대신 **미니멀 절차적 조종석**: 낮은 글레어실드(coaming)+캐노피 사이드 레일 + **중앙 플라이트 컨트롤 스틱**. 윈드실드 전방 완전 개방.
+- **컨트롤 스틱**: 베이스 힌지 피벗 그룹, 샤프트+그립(캡/햇스위치/적색 트리거). `updateCockpit`에서 **controls.pitch/roll로 디플렉션**(당김=뒤로 +rot.x, 우롤=우측 -rot.z) → 매뉴얼·오토파일럿 명령을 실시간 반영. 위치/스케일 스윕으로 하단 1/3에 또렷이 보이되 수평선 안 가리게 베이스(0,-0.7,-0.58) 스케일 1.2 채택.
+- 정리: glTF 로더/CDN 스크립트/CC-BY 크레딧/`assets/cockpit.glb`(978KB) 제거 → 모든 3D 콘텐츠 절차적 생성. 튜닝 훅 `window.__ckStick/__ckCoam` 유지.
+**Next**:
+- (후속) 스틱 그립 디테일, 스로틀 쿼드런트(선택), 조종석 컬러 테마(eng 모드 정합).
+**Notes**:
+- 표시 전용 → 물리/착륙 불변. 검증: V 뷰 레벨/선회 스크린샷, AIL 0.25 시 스틱 기울어짐 확인.
