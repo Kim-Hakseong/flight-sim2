@@ -45,7 +45,7 @@ export function buildCockpit() {
   const cyanMat   = new THREE.MeshStandardMaterial({ color: 0x2bb6c8, emissive: 0x06343a, roughness: 0.5 });
 
   const assembly = new THREE.Group();
-  assembly.position.set(0, -0.82, -0.55);
+  assembly.position.set(0, -0.70, -0.55);
   assembly.scale.setScalar(0.95);
 
   // base console: octagonal plate + silver rim + glowing gimbal ring + a few buttons

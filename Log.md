@@ -1098,3 +1098,13 @@ summary: Three.js 기반 브라우저 비행 시뮬레이터 — MAVLink/QGround
 - (후속) 스로틀 쿼드런트(레퍼런스 좌측 슬라이더), 헤드 버튼 라벨/발광.
 **Notes**:
 - 표시 전용 → 물리/착륙 불변. r128엔 Capsule/RoundedBox 없음 → Box/Cylinder/Torus로 구성.
+
+## 2026-06-24 — M48: 컨트롤 스틱 높이 상향
+
+**Status**: GREEN (스틱 상향 확인, 194 통과, 콘솔 0, 착륙 불변)
+**Files changed**: src/cockpit.js (assembly y -0.82→-0.70)
+**Tests**: 194 통과, 콘솔 0, 6 m/s+2.5 거스트 착륙 PASS(110m)
+**Decisions**:
+- 피드백 "스틱 더 위로" → assembly.position.y -0.82→-0.70(스윕 -0.76/-0.72/-0.68 중). HOTAS 헤드가 하단-중앙에 더 또렷이 올라오되 수평선 전방은 유지.
+**Notes**:
+- 표시 전용 → 물리/착륙 불변.
