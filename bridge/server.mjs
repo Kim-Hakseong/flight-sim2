@@ -35,6 +35,7 @@ import {
   decodeMissionCount,
   decodeMissionItemInt,
   decodeCommandLong,
+  decodeCommandInt,
 } from './mavlink.mjs';
 
 // MAV_MODE_FLAG bits (subset).
@@ -118,6 +119,17 @@ function broadcast(event, data) {
 
 let pendingMission = null;        // { count, items, expectedSeq, gcsSys, gcsComp }
 let activeMission = null;          // [items] after upload completes
+
+// Latest GCS nav command (M3). One-shot SSE events get lost if the browser's
+// EventSource drops/reconnects, so buffer the last command and re-send it on every
+// SSE connect; the sim dedupes by __seq so it applies exactly once.
+let lastNav = null;
+let navSeq = 0;
+function sendNav(event, data) {
+  navSeq += 1;
+  lastNav = { event, data: { ...data, __seq: navSeq } };
+  broadcast(event, lastNav.data);
+}
 
 function handleMissionCount(p) {
   const c = decodeMissionCount(p.payload);
@@ -218,6 +230,11 @@ const server = createServer((req, res) => {
     if (activeMission) {
       const payload = `event: mission\ndata: ${JSON.stringify({ items: activeMission, home: HOME })}\n\n`;
       try { res.write(payload); } catch {}
+    }
+    // Re-send the latest nav command so a (re)connecting sim catches one it may have
+    // missed; the sim dedupes by __seq, so a stale re-send is a no-op.
+    if (lastNav) {
+      try { res.write(`event: ${lastNav.event}\ndata: ${JSON.stringify(lastNav.data)}\n\n`); } catch {}
     }
     req.on('close', () => sseClients.delete(res));
     return;
@@ -369,6 +386,9 @@ function handleIncoming(p) {
     case 73:   // MISSION_ITEM_INT (one waypoint from QGC)
       handleMissionItem(p);
       break;
+    case 75:   // COMMAND_INT (GUIDED go-to: DO_REPOSITION with lat/lon)
+      handleCommandInt(p);
+      break;
     case 47:   // MISSION_ACK from GCS — silent
       break;
     case 76:   // COMMAND_LONG → ack + (optionally) extra data
@@ -465,8 +485,35 @@ function handleCommandLong(p) {
     });
   }
 
+  // ----- Nav commands (M3): drive the sim autopilot via SSE -----
+  // 22 = MAV_CMD_NAV_TAKEOFF (param7 = altitude)
+  if (cmd.command === 22) {
+    sendNav('takeoff', { alt: cmd.params[6] || 0 });
+    console.log(`[bridge] NAV_TAKEOFF alt=${(cmd.params[6] || 0).toFixed(0)}`);
+  }
+  // 21 = MAV_CMD_NAV_LAND
+  if (cmd.command === 21) { sendNav('land', {}); console.log('[bridge] NAV_LAND'); }
+  // 20 = MAV_CMD_NAV_RETURN_TO_LAUNCH
+  if (cmd.command === 20) { sendNav('rtl', {}); console.log('[bridge] RTL'); }
+  // 192 = MAV_CMD_DO_REPOSITION sent as COMMAND_LONG (param5/6/7 = lat/lon/alt as floats)
+  if (cmd.command === 192) {
+    sendNav('goto', { lat: cmd.params[4], lon: cmd.params[5], alt: cmd.params[6] || 0 });
+    console.log(`[bridge] DO_REPOSITION(LONG) ${cmd.params[4].toFixed(5)},${cmd.params[5].toFixed(5)}`);
+  }
+
   // ACCEPT every command we see — keeps QGC happy. (0 = MAV_RESULT_ACCEPTED)
   send(encodeCommandAck({ command: cmd.command, result: 0 }));
+}
+
+// COMMAND_INT — QGC "Go to location" sends DO_REPOSITION (192) here with lat/lon as
+// int32·1e7 (so they keep precision). Broadcast a GUIDED go-to to the sim.
+function handleCommandInt(p) {
+  const c = decodeCommandInt(p.payload);
+  if (c.command === 192) {
+    sendNav('goto', { lat: c.x / 1e7, lon: c.y / 1e7, alt: c.z || 0 });
+    console.log(`[bridge] DO_REPOSITION(INT) ${(c.x / 1e7).toFixed(5)},${(c.y / 1e7).toFixed(5)} alt=${c.z}`);
+  }
+  send(encodeCommandAck({ command: c.command, result: 0 }));
 }
 
 // ---------- Boot ----------

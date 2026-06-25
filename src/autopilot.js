@@ -17,7 +17,9 @@
 let mission = null;        // { items: [...], home: {lat, lon, alt} }
 let started = false;
 let currentSeq = 0;
-let phase = 'IDLE';         // IDLE | TAKEOFF | NAV | DONE
+let phase = 'IDLE';         // IDLE | TAKEOFF | NAV | LOITER | DONE
+let loiter = false;         // M3: orbit the last waypoint instead of going DONE
+                            // (GUIDED go-to / RTL / takeoff-and-hold)
 
 const ARRIVAL_HORIZ_M = 160;       // switch waypoints early (anticipate the turn)
                                    // — avoids a tight over-steer at the exact WP,
@@ -158,7 +160,10 @@ export function setMission(items, home) {
   currentSeq = 0;
   started = false;
   phase = 'IDLE';
+  loiter = false;
 }
+// M3: when set, reaching the final waypoint orbits it (hold) instead of going DONE.
+export function setLoiter(on) { loiter = !!on; }
 export function startMission() {
   if (!mission || mission.items.length === 0) return;
   started = true;
@@ -187,7 +192,7 @@ export function getPhase() { return phase; }
  */
 export function tick(simState, dt = 0.02) {
   if (!isActive()) { phase = 'IDLE'; return null; }
-  if (currentSeq >= mission.items.length) { phase = 'DONE'; return holdLevel(); }
+  if (currentSeq >= mission.items.length) { return endOfMission(simState); }
 
   const groundOffset = simState.groundOffset || GROUND_OFFSET;
   const altAGL = simState.y - groundOffset;
@@ -237,7 +242,7 @@ export function tick(simState, dt = 0.02) {
   const horiz = Math.hypot(tgt.x - simState.x, tgt.z - simState.z);
   if (horiz < ARRIVAL_HORIZ_M && Math.abs(tgt.y - simState.y) < ARRIVAL_VERT_M) {
     currentSeq++;
-    if (currentSeq >= mission.items.length) { phase = 'DONE'; return holdLevel(); }
+    if (currentSeq >= mission.items.length) { return endOfMission(simState); }
   }
 
   // Re-resolve current target after possible advance.
@@ -292,6 +297,28 @@ export function tick(simState, dt = 0.02) {
 
 function holdLevel() {
   return { pitch: 0, roll: 0, yaw: 0, throttle: 0.5 };
+}
+
+// Reached the final waypoint: either hold a steady orbit (GUIDED / RTL / takeoff)
+// or stop guiding (DONE → wings-level).
+function endOfMission(simState) {
+  if (!loiter) { phase = 'DONE'; return holdLevel(); }
+  phase = 'LOITER';
+  const speed = Math.hypot(simState.vx, simState.vy, simState.vz);
+  const qScale = clamp((REF_SPEED / Math.max(speed, 20)) ** 2, 0.35, 1.2);
+  // Steady right orbit at ~18° bank, holding altitude (level vy) and cruise speed.
+  const desiredBank = 18 * Math.PI / 180;
+  const rollCmd = rollToBank(desiredBank, simState.bankRad, simState.rollRate);
+  const turnComp = TURN_COMP * (1 / Math.cos(desiredBank) - 1);
+  const desiredPitch = clamp(turnComp - VS_DAMP * clamp(simState.vy / VS_SCALE, -1, 1), -MAX_PITCH, MAX_PITCH);
+  const pitchCmd = clamp(
+    (desiredPitch - simState.pitchRad) * PITCH_KP - simState.pitchRate * PITCH_RATE_KD,
+    PITCH_LIMIT_DOWN, PITCH_LIMIT_UP);
+  const throttleCmd = clamp(THR_TRIM + (TARGET_SPEED - speed) * THR_SPEED_GAIN, THR_FLOOR, 1.0);
+  return {
+    pitch: pitchCmd * qScale, roll: rollCmd * qScale,
+    yaw: yawCommand(rollCmd * qScale, simState.bankRad, simState.yawRate, speed, qScale), throttle: throttleCmd,
+  };
 }
 
 // Glideslope approach → flare → touchdown to a `land` waypoint (the touchdown

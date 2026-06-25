@@ -11,7 +11,7 @@ import { initHud, updateHud, setHudEngMode } from './hud.js';
 import { initEngineering } from './engineering.js';
 import { maybeSend, isBridgeOnline, mergeMeasuredIntoTelemetry } from './telemetry.js';
 import * as autopilot from './autopilot.js';
-import { connect as connectMissionLink } from './missionLink.js';
+import { connect as connectMissionLink, setNavHandlers } from './missionLink.js';
 import {
   createColliders,
   checkAircraft,
@@ -51,7 +51,7 @@ import { DT_PHYS, MAX_SUBSTEPS, planSteps, rk4Step } from './fixedStep.js';
 import { stepActuator } from './actuators.js';
 import { makeRng, stepSensor } from './sensors.js';
 import { createKF, kfStepGated } from './estimator.js';
-import { buildDemoMission } from './missions.js';
+import { buildDemoMission, localToWaypoint } from './missions.js';
 import { windStep, shearFactor } from './wind.js';
 
 const THREE = window.THREE;
@@ -686,6 +686,34 @@ connectMissionLink(HOME);
   });
 }
 if (typeof window !== 'undefined') window.__arm = (v) => { if (v != null) armed = !!v; return armed; };
+
+// ----- GCS nav commands (M3): GUIDED go-to + takeoff / land / RTL -----
+// Each builds a small mission on the proven autopilot guidance and engages AUTO.
+// Constructed here (not in the autopilot) because it needs HOME + the live position.
+function navTakeoff(altReq) {
+  const alt = altReq > 5 ? altReq : 150;                // climb-out target (AGL)
+  const ahead = localToWaypoint(HOME, 0, sim.position.z - 3000, alt); // straight ahead, north
+  armed = true;
+  autopilot.setMission([ahead], HOME); autopilot.startMission(); autopilot.setLoiter(true);
+}
+function navGoto(lat, lon, altReq) {
+  const altAGL = Math.max(0, sim.position.y - aircraft.userData.gearOffset);
+  const alt = altReq > 5 ? altReq : altAGL;             // hold current alt if none given
+  autopilot.setMission([{ lat, lon, alt, frame: 3 }], HOME); autopilot.startMission(); autopilot.setLoiter(true);
+}
+function navLand() {
+  const fix = localToWaypoint(HOME, 0, -2000, 150);     // approach fix on the centreline
+  const td = localToWaypoint(HOME, 0, -4000, 0); td.land = true; // touchdown (proven geometry)
+  autopilot.setMission([fix, td], HOME); autopilot.startMission(); autopilot.setLoiter(false);
+}
+function navRtl() {
+  const home = localToWaypoint(HOME, 0, RUNWAY_START_Z, 150); // return over the launch point
+  autopilot.setMission([home], HOME); autopilot.startMission(); autopilot.setLoiter(true);
+}
+setNavHandlers({ takeoff: navTakeoff, goto: navGoto, land: navLand, rtl: navRtl });
+if (typeof window !== 'undefined') {
+  window.__nav = { takeoff: navTakeoff, goto: navGoto, land: navLand, rtl: navRtl };
+}
 
 function resetAircraft() {
   sim.position.set(0, aircraft.userData.gearOffset, RUNWAY_START_Z);

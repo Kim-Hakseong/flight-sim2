@@ -9,6 +9,12 @@ const BRIDGE_PORT_DEFAULT = 8765;
 let online = false;
 let es = null;
 
+// GCS nav-command handlers (M3): main.js registers these (it needs HOME + the live
+// position to build the missions). Attached on the SAME EventSource as the proven
+// mission/mode listeners so they fire reliably.
+let nav = {};
+export function setNavHandlers(handlers) { nav = handlers || {}; }
+
 export function isMissionLinkOnline() { return online; }
 export function getEventSource() { return es; }
 
@@ -21,6 +27,11 @@ function resolveUrl() {
   }
   return `http://localhost:${BRIDGE_PORT_DEFAULT}/commands`;
 }
+
+// Nav commands are one-shot; the SSE link can drop and re-send (the bridge buffers
+// the latest), so dedupe by the bridge's monotonic __seq — apply each command once.
+let navSeq = 0;
+function freshNav(d) { if (d && d.__seq) { if (d.__seq <= navSeq) return false; navSeq = d.__seq; } return true; }
 
 export function connect(defaultHome) {
   if (typeof EventSource === 'undefined') return;
@@ -54,5 +65,20 @@ export function connect(defaultHome) {
       const data = JSON.parse(e.data);
       if (data.auto === false) abort();
     } catch {}
+  });
+
+  // GCS nav commands (M3) — delegate to main.js-registered builders. Deduped by
+  // __seq so a re-send on reconnect (or the buffered re-send) applies only once.
+  es.addEventListener('takeoff', (e) => {
+    try { const d = JSON.parse(e.data); if (freshNav(d) && nav.takeoff) nav.takeoff(d.alt || 0); } catch {}
+  });
+  es.addEventListener('land', (e) => {
+    try { const d = JSON.parse(e.data || '{}'); if (freshNav(d) && nav.land) nav.land(); } catch {}
+  });
+  es.addEventListener('rtl', (e) => {
+    try { const d = JSON.parse(e.data || '{}'); if (freshNav(d) && nav.rtl) nav.rtl(); } catch {}
+  });
+  es.addEventListener('goto', (e) => {
+    try { const d = JSON.parse(e.data); if (freshNav(d) && nav.goto) nav.goto(d.lat, d.lon, d.alt || 0); } catch {}
   });
 }

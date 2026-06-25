@@ -337,6 +337,23 @@ export function decodeCommandLong(payload) {
   };
 }
 
+// COMMAND_INT (msg 75): param1..4 (f32), x (i32, lat*1e7), y (i32, lon*1e7),
+// z (f32, alt), command (u16), target_sys, target_comp, frame, current, autocontinue.
+// Used by QGC "Go to location" → MAV_CMD_DO_REPOSITION (192) where x/y are lat/lon.
+export function decodeCommandInt(payload) {
+  const dv = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  return {
+    params: [dv.getFloat32(0, true), dv.getFloat32(4, true), dv.getFloat32(8, true), dv.getFloat32(12, true)],
+    x: dv.getInt32(16, true),
+    y: dv.getInt32(20, true),
+    z: dv.getFloat32(24, true),
+    command: dv.getUint16(28, true),
+    target_system: payload[30] !== undefined ? payload[30] : 0,
+    target_component: payload[31] !== undefined ? payload[31] : 0,
+    frame: payload[32] !== undefined ? payload[32] : 0,
+  };
+}
+
 // ---- Decoder ----
 //
 // Returns an array of { version: 1|2, msgId, sys, comp, seq, payload } parsed

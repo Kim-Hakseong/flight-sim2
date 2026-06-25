@@ -95,3 +95,33 @@ Append one entry per loop (format in CLAUDE.md §5). Newest at the bottom.
 - M3: GUIDED + nav commands (NAV_TAKEOFF / NAV_LAND / RTL via COMMAND_LONG; GCS go-to).
 **Notes**:
 - Pages: https://kim-hakseong.github.io/flight-sim2/ . `npm run bridge` for the GCS loop.
+
+## 2026-06-25 — M3: GCS nav commands — GUIDED go-to + TAKEOFF / LAND / RTL
+
+**Status**: GREEN (all four commands fly via the autopilot; verified headless)
+**Files changed**: bridge/mavlink.mjs (decodeCommandInt), bridge/server.mjs (nav cmds + sendNav buffer/re-send), src/autopilot.js (loiter), src/missionLink.js (nav listeners + __seq dedup), src/main.js (nav builders), tests/gcs-nav-check.mjs(new), tests/mavlink.test.mjs
+**Tests**: 195 unit PASS · console 0 · autoland PASS · gcs-loop-check 13/13 · gcs-browser-check 7/7 · gcs-nav-check 12/12
+**Decisions**:
+- The GCS can now command the vehicle in real time (standard MAVLink IDs first):
+  - **NAV_TAKEOFF (22)** → climb out + hold; **NAV_LAND (21)** → glideslope approach to
+    the runway (reuses the tuned autoland); **RTL (20)** → return over the launch point +
+    loiter; **DO_REPOSITION (192, COMMAND_INT/LONG)** → GUIDED go-to a GCS-set point.
+  - bridge decodes the commands → SSE → missionLink → main.js nav builders, which
+    construct a small mission on the proven autopilot guidance (`localToWaypoint`).
+    Added a `loiter` mode to the autopilot (orbit the final waypoint for go-to/RTL/takeoff).
+- **Reliability fix**: one-shot SSE command events are lost if the browser's EventSource
+  drops/reconnects (saw a "zombie" early connection in headless). The bridge now BUFFERS
+  the latest nav command with a monotonic `__seq` and re-sends it on every SSE connect;
+  the sim dedupes by `__seq` (apply once). GCS links drop in the field too — this is the
+  right production behaviour, not just a test fix.
+- Verified in two robust halves (the headless app-EventSource is flaky, but the same path
+  is confirmed live in QGC for M1/M2): A) bridge broadcasts the right SSE event per
+  command (Node SSE client); B) the nav builders fly correctly via window.__nav (TAKEOFF
+  →152m, GOTO 3338→2110m toward target, RTL engages, LAND descends 202→157m).
+- window.__nav { takeoff, goto, land, rtl } exposed for manual/console use.
+**Next**:
+- M4: parameters (PARAM_REQUEST_LIST / PARAM_SET) so the GCS can read/tune gains.
+**Notes**:
+- Live in QGC: arm → Takeoff slider → climbs; click "Go to location" → flies there + loiters;
+  Return → comes home; Land → approaches the runway. Standard IDs; adjust if QGC sends
+  SET_POSITION_TARGET for GUIDED on a generic autopilot.

@@ -26,6 +26,7 @@ import {
   decodeMissionCount,
   decodeMissionItemInt,
   decodeCommandLong,
+  decodeCommandInt,
   decode,
 } from '../bridge/mavlink.mjs';
 
@@ -390,4 +391,20 @@ test('decodeCommandLong: extracts command id and 7 params', () => {
   assert.equal(got.command, 300);
   assert.ok(Math.abs(got.params[0] - 1.5) < 1e-6);
   assert.ok(Math.abs(got.params[1] - -2.5) < 1e-6);
+});
+
+test('decodeCommandInt: DO_REPOSITION lat/lon (int32·1e7) + z', () => {
+  const payload = new Uint8Array(35);
+  const dv = new DataView(payload.buffer);
+  dv.setInt32(16, Math.round(37.49 * 1e7), true); // x = lat
+  dv.setInt32(20, Math.round(126.46 * 1e7), true); // y = lon
+  dv.setFloat32(24, 200, true);                    // z = alt
+  dv.setUint16(28, 192, true);                     // MAV_CMD_DO_REPOSITION
+  payload[32] = 6;                                  // frame
+  const got = decodeCommandInt(payload);
+  assert.equal(got.command, 192);
+  assert.equal(got.frame, 6);
+  assert.ok(Math.abs(got.x / 1e7 - 37.49) < 1e-6);
+  assert.ok(Math.abs(got.y / 1e7 - 126.46) < 1e-6);
+  assert.equal(got.z, 200);
 });
