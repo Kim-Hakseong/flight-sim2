@@ -3,18 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Flight Sim — MVP</title>
+  <title>flight-sim2</title>
   <style>
     html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
     #c { display: block; width: 100vw; height: 100vh; }
-
-    /* NXS brand logo (top-left). */
-    #brand-logo {
-      position: fixed; top: 14px; left: 16px; z-index: 32; height: 26px;
-      pointer-events: none; image-rendering: auto;
-      filter: drop-shadow(0 0 6px rgba(0,0,0,0.6));
-    }
-    @media (max-width: 940px) { #brand-logo { height: 20px; top: 10px; left: 10px; } }
 
     /* Military HUD: amber monochrome, monospace. */
     #hud {
@@ -109,20 +101,6 @@
     #hud-mute   { top: 146px; color: #888; }
     #hud-mute.hidden   { display: none; }
 
-    #hud-scenario {
-      position: absolute; bottom: 100px; left: 18px; max-width: 280px;
-      padding: 8px 10px; border: 1px solid #3dff9a; background: rgba(0,0,0,0.45);
-      font-size: 11px; letter-spacing: 1px;
-    }
-    #hud-scenario.hidden { display: none; }
-    #hud-scenario .title { color: #aaffcc; font-weight: 700; margin-bottom: 4px; }
-    #hud-scenario .obj   { opacity: 0.85; }
-    #hud-scenario .score { margin-top: 4px; color: #6fff6f; font-weight: 700; }
-
-    #hud-mp { top: 178px; left: 18px; position: absolute;
-      padding: 4px 10px; font-size: 11px; letter-spacing: 1px;
-      color: #aac8ff; border: 1px solid #aac8ff; background: rgba(0,0,0,0.4); }
-    #hud-mp.hidden { display: none; }
     #hud-damage .label { display: block; opacity: 0.75; margin-bottom: 4px; }
     #hud-damage .row { display: grid; grid-template-columns: 50px 1fr; gap: 4px; align-items: center; margin: 2px 0; font-size: 9px; }
     #hud-damage .bar { position: relative; height: 6px; background: rgba(61,255,154,0.15); border: 1px solid rgba(61,255,154,0.5); }
@@ -152,15 +130,12 @@
       #hud-bottom .label { font-size: 8px; }
       #hud-damage { top: auto; bottom: 220px; right: 8px; width: 104px; transform: scale(0.85); transform-origin: bottom right; }
       #hud-qgc, #hud-nav { font-size: 9px; padding: 2px 6px; }
-      #hud-scenario { bottom: 220px; left: 8px; max-width: 160px; font-size: 9px; }
       #hud-help { display: none; }
     }
   </style>
 </head>
 <body>
   <canvas id="c"></canvas>
-
-  <img id="brand-logo" src="etc/image001.png" alt="NXS — New Experiment System" />
 
   <div id="hud">
     <div class="hud-tape" id="hud-speed">
@@ -195,17 +170,8 @@
       W/S pitch · A/D roll · Q/E yaw · ↑/↓ throttle<br>
       R reset · V camera · P pause<br>
       M start mission · N abort autopilot<br>
-      F record · L replay · Y export CSV · H HITL · X mute<br>
-      Z plane↔drone · T scenario cycle · G start · J multiplayer
+      F record · L replay · Y export CSV · H HITL · X mute
     </div>
-
-    <div id="hud-scenario" class="hidden">
-      <div class="title" id="sc-name">—</div>
-      <div class="obj"  id="sc-obj">—</div>
-      <div class="score" id="sc-score">0</div>
-    </div>
-
-    <div id="hud-mp" class="hidden">MP <span id="mp-count">0</span></div>
 
     <div id="hud-rec" class="hidden">REC</div>
     <div id="hud-replay" class="hidden">REPLAY</div>

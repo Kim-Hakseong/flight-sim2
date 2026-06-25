@@ -1,17 +1,16 @@
-// Camera modes: chase / cockpit / external (orbit-style snapshot).
+// Camera modes: chase / external (orbit-style snapshot).
 // COORDINATE: Three.js right-handed, +Y up, -Z forward.
 // Body frame: +X right wing, +Y top, -Z nose.
 //
-// Cockpit & chase use a SMOOTHED pose (position lerp + orientation slerp) so the
-// view low-passes the airframe's high-frequency micro-oscillation — otherwise the
-// rigid 1:1 mount makes the cockpit view jitter/shake unrealistically (M32).
+// Chase uses a SMOOTHED pose (position lerp + orientation slerp) so the view
+// low-passes the airframe's high-frequency micro-oscillation — otherwise the
+// rigid 1:1 mount makes the view jitter/shake unrealistically (M32).
 
 const THREE = window.THREE;
 
-export const CAMERA_MODES = ['chase', 'cockpit', 'external'];
+export const CAMERA_MODES = ['chase', 'external'];
 
 const CHASE_OFFSET = new THREE.Vector3(0, 2.5, 9);     // behind & above (body frame)
-const COCKPIT_OFFSET = new THREE.Vector3(0, 0.62, -1.2); // seat-ish, just behind the canopy
 
 const _tmpPos = new THREE.Vector3();
 const _tmpQuat = new THREE.Quaternion();
@@ -63,17 +62,6 @@ export function updateCamera(camera, aircraft, rig, dt) {
     camera.position.set(a.x + Math.cos(rig.externalAngle) * r, a.y + 4, a.z + Math.sin(rig.externalAngle) * r);
     camera.up.set(0, 1, 0);
     camera.lookAt(a.x, a.y, a.z);
-    return;
-  }
-
-  if (rig.mode === 'cockpit') {
-    // Camera sits in the seat and shares the airframe's orientation (so it banks
-    // with the aircraft) — but slerped, so vibration is filtered out.
-    aircraft.localToWorld(_tmpPos.copy(COCKPIT_OFFSET));
-    aircraft.getWorldQuaternion(_tmpQuat);
-    // Slightly stronger orientation damping than position: kills the jitter while
-    // staying responsive to real manoeuvres.
-    applyPose(camera, rig, _tmpPos, _tmpQuat, dt, 22, 11);
     return;
   }
 

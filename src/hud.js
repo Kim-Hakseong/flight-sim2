@@ -12,7 +12,6 @@ export function initHud() {
     'v-status','cell-status','hud-qgc','hud-nav','v-mode','v-wp','cell-mode','cell-wp',
     'dmg-fus','dmg-lwg','dmg-rwg','dmg-tail','dmg-eng',
     'hud-rec','hud-replay','hud-hitl','hud-pad','hud-mute',
-    'hud-scenario','sc-name','sc-obj','sc-score','hud-mp','mp-count',
   ];
   for (const id of ids) els[id] = document.getElementById(id);
 
@@ -110,25 +109,6 @@ export function updateHud(state) {
   if (els['hud-hitl'])   els['hud-hitl'].classList.toggle('hidden',   !state.hitl);
   if (els['hud-pad'])    els['hud-pad'].classList.toggle('hidden',    !state.padConnected);
   if (els['hud-mute'])   els['hud-mute'].classList.toggle('hidden',   !state.audioMuted);
-
-  if (state.scenario) {
-    const s = state.scenario;
-    if (els['hud-scenario']) els['hud-scenario'].classList.remove('hidden');
-    if (els['sc-name'])  els['sc-name'].textContent  = s.title;
-    if (els['sc-obj'])   els['sc-obj'].textContent   = s.objective;
-    if (els['sc-score']) els['sc-score'].textContent = `SCORE ${s.score}`;
-  } else if (els['hud-scenario']) {
-    els['hud-scenario'].classList.add('hidden');
-  }
-
-  if (state.multiplayer) {
-    if (els['hud-mp']) {
-      els['hud-mp'].classList.remove('hidden');
-      if (els['mp-count']) els['mp-count'].textContent = state.multiplayer.peers;
-    }
-  } else if (els['hud-mp']) {
-    els['hud-mp'].classList.add('hidden');
-  }
 
   drawHUD(state);
 }

@@ -223,23 +223,6 @@ const server = createServer((req, res) => {
     return;
   }
 
-  // Multiplayer: peers POST their pose; we re-broadcast to everyone.
-  if (req.method === 'POST' && req.url === '/mp/state') {
-    let body = '';
-    req.on('data', c => { body += c; });
-    req.on('end', () => {
-      try {
-        const t = JSON.parse(body);
-        broadcast('mp_state', t);
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end('{"ok":true}');
-      } catch (e) {
-        res.writeHead(400); res.end(String(e && e.message || e));
-      }
-    });
-    return;
-  }
-
   // HITL: external simulator pushes vehicle state here. We just rebroadcast.
   if (req.method === 'POST' && req.url === '/hitl/state') {
     let body = '';
@@ -289,6 +272,15 @@ function metersPerDegLon(latDeg) {
 
 function relayTelemetry(t) {
   const time_boot_ms = (Date.now() - bootMs) >>> 0;
+
+  // The sim is authoritative for mode/arm — drive the HEARTBEAT base_mode from what
+  // it reports, so the GCS shows the vehicle's TRUE state (AUTO vs MANUAL, armed) (M2).
+  if (t.mode === 'AUTO' || t.mode === 'MANUAL') {
+    let base = 0;
+    if (t.armed !== false) base |= MODE_ARMED;
+    base |= t.mode === 'AUTO' ? MODE_AUTO : MODE_MANUAL;
+    modeFlags = base;
+  }
 
   // Sim coord → world geodetic.
   // Convention: sim +X = east, sim -Z = north, sim +Y = up.

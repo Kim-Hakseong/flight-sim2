@@ -2,10 +2,7 @@
 // COORDINATE: Three.js right-handed, +Y up, -Z forward.
 // Body frame: +X right wing, +Y top, -Z nose.
 
-import { buildWorld, buildMapContent, RUNWAY_START_Z, MAPS, DEFAULT_MAP, CONDITIONS, DEFAULT_CONDITION } from './world.js';
-import { buildClouds, driftClouds, setCloudStyle } from './clouds.js';
-import { buildStars, buildMoon, setNightSky, buildPrecip, updatePrecip } from './weather.js';
-import { buildCockpit } from './cockpit.js';
+import { buildWorld, RUNWAY_START_Z, MAPS, DEFAULT_MAP, CONDITIONS, DEFAULT_CONDITION } from './world.js';
 import { buildAircraft, AIRCRAFT_MODELS, DEFAULT_MODEL } from './aircraft.js';
 import { initModelPicker, initIntro, initTouchControls, isTouchDevice } from './ui.js';
 import { createCameraRig, nextMode, updateCamera } from './camera.js';
@@ -33,10 +30,6 @@ import {
 import * as hitl from './hitl.js';
 import * as audio from './audio.js';
 import { pollGamepad, isConnected as isPadConnected } from './gamepad.js';
-import { spawnTraffic, tickTraffic } from './aiTraffic.js';
-import * as scenario from './scenario.js';
-import * as drone from './drone.js';
-import * as mp from './multiplayer.js';
 import { getEventSource } from './missionLink.js';
 import {
   airDensity,
@@ -113,63 +106,16 @@ if (typeof navigator !== 'undefined' && navigator.xr) {
 
 const scene = new THREE.Scene();
 const colliders = createColliders();
-// Selected map (M34): persisted in sessionStorage, applied on load (a map change
-// reloads the page — far simpler/safer than tearing down the live scene).
-const MAP_KEY = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('fs-map')) || DEFAULT_MAP;
-const world = buildWorld(scene, colliders, MAP_KEY);
+// Single static world build (GCS lean build): one map ('plains') and one
+// condition ('day'). The runway/ground/obstacles are identical to the original.
+const currentMap = DEFAULT_MAP;
+const world = buildWorld(scene, colliders, currentMap);
 const sunLight = world.sun;
-let currentMap = MAP_KEY;
-let mapGroup = world.group;     // swappable scenery group
-let mapWater = world.water;     // animated ocean mesh (or null)
-let mapSky = world.skyMat;      // sky shader material (re-tinted by conditions)
-const COND_KEY = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('fs-cond')) || DEFAULT_CONDITION;
-let currentCond = CONDITIONS[COND_KEY] ? COND_KEY : DEFAULT_CONDITION;
-const cloudField = buildClouds(scene);
-// Night sky + precipitation (M38). Stars/moon fade in with the condition; rain/snow
-// follow the camera. All persistent; driven by applyLighting + the loop.
-const stars = buildStars(); scene.add(stars);
-const moon = buildMoon(); scene.add(moon);
-const precip = buildPrecip(); scene.add(precip.rain); scene.add(precip.snow);
-let precipMode = null;
-// Cockpit interior (M39): a 3D panel shown only in the V (cockpit) view. It is
-// pinned to the SMOOTHED camera (fixed in the view, no jitter) — the world tilts
-// behind it like a real cockpit. Body origin sits at -COCKPIT_OFFSET from the eye.
-// Simple open cockpit (M46): a minimal coaming + canopy rails + a centre control
-// stick. Authored eye-relative; placed at the camera each frame so it banks with
-// the view while the windscreen stays wide open. The stick deflects with the
-// control command (manual or autopilot) for a live inceptor.
-const cockpitInterior = buildCockpit(); scene.add(cockpitInterior);
-if (typeof window !== 'undefined') {
-  window.__ckStick = (bx, by, bz, s = 1) => {
-    const a = cockpitInterior.userData.assembly;
-    if (a) { a.position.set(bx, by, bz); a.scale.setScalar(s); }
-    return a ? a.position.toArray().concat(s) : null;
-  };
-  window.__ckCoam = (y, z) => {
-    const c = cockpitInterior.userData.coam, l = cockpitInterior.userData.lip;
-    if (c) c.position.set(0, y, z);
-    if (l) l.position.set(0, y + 0.05, z + 0.19);
-  };
-}
-function updateCockpit() {
-  const show = camRig.mode === 'cockpit' && vehicleType === 'plane' && !isReplaying(recorder);
-  cockpitInterior.visible = show;
-  // Hide the exterior airframe in the cockpit view — otherwise the camera (inside
-  // the solid fuselage) only sees its interior and the view is occluded.
-  aircraft.visible = !show;
-  if (!show) return;
-  cockpitInterior.quaternion.copy(camera.quaternion);
-  cockpitInterior.position.copy(camera.position);
-  const stick = cockpitInterior.userData.stick;
-  if (stick) {
-    // Pull back (pitch+) tips the grip toward the pilot (+rot.x); roll-right tips
-    // it right (-rot.z). Reflects the actual command, so the AP moves it too.
-    stick.rotation.x = (controls.pitch || 0) * 0.33;
-    stick.rotation.z = -(controls.roll || 0) * 0.33;
-  }
-}
+let mapWater = world.water;     // animated ocean mesh (null on the plains map)
+let mapSky = world.skyMat;      // sky shader material
+const currentCond = DEFAULT_CONDITION;
 
-// Apply a time-of-day / weather condition on top of the active map (M37). Sets
+// Apply the (single) lighting condition on top of the active map. Sets
 // the sun (direction = time of day), hemisphere/ambient light, fog, sky tint,
 // exposure, ocean tint and cloud look. Unspecified fields fall back to the map.
 const _ld = new THREE.Vector3();
@@ -212,9 +158,6 @@ function applyLighting(mapCfg, condKey) {
     mapWater.material.uniforms.uSunDir.value.copy(dir);
     mapWater.material.uniforms.uDeep.value.multiplyScalar(1); // (kept; deep stays biome)
   }
-  if (cond.cloud) setCloudStyle(cloudField, cond.cloud.opacity, cond.cloud.color);
-  setNightSky(stars, moon, cond.stars ?? 0);   // stars/moon for night/dusk
-  precipMode = cond.precip || null;             // rain/snow (driven in the loop)
   // Reflections (IBL) re-tinted to the final sky.
   regenEnv({ sky: zn.getHex(), horizon: hz.getHex(), ground: gd.getHex() });
 }
@@ -391,8 +334,6 @@ function setAircraftModel(key) {
   return true;
 }
 let modelPicker = null;
-let mapPicker = null;
-let condPicker = null;
 
 // Control sensitivity presets (M44) — three coarse, mouse-DPI-style buckets that
 // map to the keyboard input-shaping feel (M42). "soft" = slow stick + strong expo
@@ -428,58 +369,15 @@ if (typeof window !== 'undefined') {
   // three buttons and window.__sensitivity reads/sets it programmatically.
   window.__sensitivity = (lvl) => { if (lvl) applySensitivity(lvl); return sensLevel; };
   try { applySensitivity(localStorage.getItem(SENS_KEY) || DEFAULT_SENS); } catch { applySensitivity(DEFAULT_SENS); }
-  // Map selection (M35): LIVE swap — dispose the scenery group, rebuild for the new
-  // biome, re-tint the persistent lights/fog, regenerate the IBL env, and reset to
-  // the runway. No page reload. The choice is also persisted for next load.
-  window.setMap = (key) => {
-    if (!MAPS[key] || key === currentMap) return false;
-    const cfg = MAPS[key];
-    scene.remove(mapGroup);
-    disposeObject(mapGroup);
-    colliders.boxes.length = 0; colliders.cones.length = 0;
-    mapGroup = new THREE.Group(); mapGroup.name = 'mapContent';
-    const content = buildMapContent(mapGroup, colliders, cfg, world.sunDir);
-    mapWater = content.water; mapSky = content.skyMat;
-    scene.add(mapGroup);
-    currentMap = key;
-    applyLighting(cfg, currentCond);    // re-apply the time/weather to the new biome
-    if (typeof resetAircraft === 'function') resetAircraft();
-    try { sessionStorage.setItem('fs-map', key); } catch {}
-    if (mapPicker) mapPicker.refresh();
-    console.log(`[map] → ${key} (${cfg.label})`);
-    return true;
-  };
   window.__map = () => currentMap;
-  // Time-of-day / weather (M37): live, no rebuild — just re-light the scene.
-  window.setCondition = (key) => {
-    if (!CONDITIONS[key] || key === currentCond) return false;
-    currentCond = key;
-    applyLighting(MAPS[currentMap], currentCond);
-    try { sessionStorage.setItem('fs-cond', key); } catch {}
-    if (condPicker) condPicker.refresh();
-    console.log(`[cond] → ${key} (${CONDITIONS[key].label})`);
-    return true;
-  };
   window.__cond = () => currentCond;
-  // Build the on-screen UI once the DOM is ready: model + map pickers, touch
-  // controls (mobile), and the intro/controls popup.
+  // Build the on-screen UI once the DOM is ready: model picker, touch controls
+  // (mobile), and the intro/controls popup.
   const buildUI = () => {
     modelPicker = initModelPicker(
       window.listAircraftModels(),
       () => aircraftModel,
       (key) => window.setAircraftModel(key),
-    );
-    mapPicker = initModelPicker(
-      Object.entries(MAPS).map(([k, v]) => ({ key: k, label: v.label, role: v.desc })),
-      () => currentMap,
-      (key) => window.setMap(key),
-      { title: '◢ MAP', top: 188 },
-    );
-    condPicker = initModelPicker(
-      Object.entries(CONDITIONS).map(([k, v]) => ({ key: k, label: v.label, role: v.desc })),
-      () => currentCond,
-      (key) => window.setCondition(key),
-      { title: '◢ TIME / WX', top: 372 },
     );
     const params = new URLSearchParams(location.search);
     // Touch controls are always created (so the 🕹 toggle works on any device); they
@@ -573,6 +471,7 @@ let navDegraded = false;                   // FDE: GPS measurements being reject
 let navDegradedHold = 0;                   // frames to hold the warning (hysteresis)
 let gpsRejectStreak = 0;                    // consecutive rejected frames → sustained fault
 let simTime = 0;                            // mission-elapsed clock (engineering bench)
+let armed = true;                           // GCS arm state (disarm = engine cut). M2.
 
 // Atmospheric wind (M22): aerodynamics use (velocity − wind). Default calm.
 //   setWind(eastMps, northMps, gustMps)  e.g. setWind(8, 0, 4) = 8 m/s crosswind + gusts
@@ -665,13 +564,6 @@ const sim = {
 // Approximate aircraft bounding sphere radius for obstacle collision.
 const AIRCRAFT_RADIUS = 5.5;
 
-// AI traffic populates the airspace.
-const aiList = spawnTraffic(scene, 5);
-
-// Spare drone mesh (hidden until vehicle toggle). Built lazily.
-let droneMesh = null;
-let vehicleType = 'plane';   // 'plane' | 'drone'
-
 // ---------- Recorder + HITL ----------
 
 const recorder = createRecorder({ capacity: 36000 }); // 30 min @ 20 Hz
@@ -754,39 +646,6 @@ controls.onAudioToggle = () => {
   const on = audio.toggleEnabled();
   console.log(`[audio] ${on ? 'on' : 'muted'}`);
 };
-controls.onVehicleToggle = () => {
-  if (vehicleType === 'plane') {
-    if (!droneMesh) { droneMesh = drone.buildDrone(); scene.add(droneMesh); }
-    aircraft.visible = false;
-    droneMesh.visible = true;
-    vehicleType = 'drone';
-    sim.position.set(0, 1.0, 0);
-    sim.velocity.set(0, 0, 0);
-    sim.orientation.identity();
-    sim.omega.set(0, 0, 0);
-    controls.throttle = 0.5;  // hover-ish
-  } else {
-    aircraft.visible = true;
-    if (droneMesh) droneMesh.visible = false;
-    vehicleType = 'plane';
-    resetAircraft();
-  }
-  console.log(`[vehicle] now ${vehicleType}`);
-};
-let scenarioIndex = 0;
-controls.onScenarioCycle = () => {
-  const list = scenario.listCourses();
-  scenarioIndex = (scenarioIndex + 1) % list.length;
-  console.log(`[scenario] selected: ${list[scenarioIndex].name} — press G to start`);
-};
-controls.onScenarioStart = () => {
-  const s = scenario.startCourse(scenarioIndex);
-  if (s) console.log(`[scenario] started: ${scenario.listCourses()[scenarioIndex].name}`);
-};
-controls.onMultiplayerToggle = () => {
-  mp.setActive(!mp.isActive());
-  console.log(`[multiplayer] ${mp.isActive() ? 'on (peerId=' + mp.getPeerId() + ')' : 'off'}`);
-};
 controls.onCsvExport = () => {
   const csv = toCSV(recorder);
   if (!csv) { console.log('[recorder] no data to export'); return; }
@@ -817,11 +676,16 @@ window.addEventListener('touchstart', bootAudioOnce);
 // HOME defaults match bridge/server.mjs (RKSI).
 const HOME = { lat: 37.4602, lon: 126.4407, alt: 7 };
 connectMissionLink(HOME);
-// Multiplayer shares the same SSE pipe.
+// GCS arm/disarm (M2): the bridge broadcasts `mode { armed, auto }` on a SET_MODE
+// or ARM_DISARM command. Apply the arm bit to the sim; the engine cut takes effect
+// in stepSimAndControl and is reflected back to the GCS via telemetry.
 {
   const es = getEventSource();
-  if (es) mp.attach(es);
+  if (es) es.addEventListener('mode', (e) => {
+    try { const d = JSON.parse(e.data); if (typeof d.armed === 'boolean') armed = d.armed; } catch { /* ignore */ }
+  });
 }
+if (typeof window !== 'undefined') window.__arm = (v) => { if (v != null) armed = !!v; return armed; };
 
 function resetAircraft() {
   sim.position.set(0, aircraft.userData.gearOffset, RUNWAY_START_Z);
@@ -848,14 +712,13 @@ function resetAircraft() {
 }
 
 function syncMesh() {
-  const m = vehicleType === 'drone' && droneMesh ? droneMesh : aircraft;
-  m.position.copy(sim.position);
-  m.quaternion.copy(sim.orientation);
+  aircraft.position.copy(sim.position);
+  aircraft.quaternion.copy(sim.orientation);
   if (bodyAxes && bodyAxes.visible) { bodyAxes.position.copy(sim.position); bodyAxes.quaternion.copy(sim.orientation); }
 }
 
 function getActiveVehicleMesh() {
-  return vehicleType === 'drone' && droneMesh ? droneMesh : aircraft;
+  return aircraft;
 }
 
 resetAircraft();
@@ -922,6 +785,10 @@ function stepSimAndControl(dt) {
     sim.spoilers = apOut.spoilers || 0;
   }
 
+  // Armed gate (M2): a GCS DISARM cuts the engine — throttle to idle regardless of
+  // pilot / autopilot / GCS command. The airframe still flies (glides) on its energy.
+  if (!armed) controls.throttle = 0;
+
   // Wind (M22): evolve the gust once per frame; stepPhysics reads currentWind.
   // A boundary-layer shear scales the wind to ≈0 on the runway (so the ground
   // roll is undisturbed — we model no tyre cornering force) and full strength
@@ -941,11 +808,7 @@ function stepSimAndControl(dt) {
     console.warn(`[fixedStep] shed ${plan.dropped.toFixed(2)}s of sim time (frame hitch)`);
   }
   for (let i = 0; i < plan.steps; i++) {
-    if (vehicleType === 'drone') {
-      drone.stepDrone(sim, controls, DT_PHYS, GRAVITY);
-    } else {
-      stepPhysics(DT_PHYS);
-    }
+    stepPhysics(DT_PHYS);
   }
 }
 
@@ -994,10 +857,9 @@ function loop(now) {
     if (aircraft.userData.prop) aircraft.userData.prop.rotation.z += dt * 30; // visual idle spin
     tickEffects(effects, dt);
     updateCamera(camera, getActiveVehicleMesh(), camRig, dt);
-    updateCockpit();
     pushHud();
     renderScene();
-    
+
     return;
   }
 
@@ -1013,10 +875,9 @@ function loop(now) {
     emitOngoingEffects(now);
     tickEffects(effects, dt);
     updateCamera(camera, getActiveVehicleMesh(), camRig, dt);
-    updateCockpit();
     pushHud();
     renderScene();
-    
+
     return;
   }
 
@@ -1042,26 +903,16 @@ function loop(now) {
     stepSimAndControl(dt);
   }
 
-  // Tick AI traffic regardless of vehicle / pause state — gives the world life.
-  tickTraffic(aiList, dt);
-  driftClouds(cloudField, dt);
-  updatePrecip(precip, camera, dt, precipMode);
   if (mapWater) mapWater.material.uniforms.uTime.value += dt;
-
-  // Scenario tick (if active) advances objectives + scores.
-  scenario.tickScenario({
-    x: sim.position.x, y: sim.position.y, z: sim.position.z,
-    altitude: Math.max(0, sim.position.y - aircraft.userData.gearOffset),
-  }, now);
 
   // Spin propeller proportional to throttle. When the engine is destroyed,
   // it stops dead; when damaged it sputters.
-  if (vehicleType === 'plane' && aircraft.userData.prop) {
+  if (aircraft.userData.prop) {
     const eng = sim.damage.engine;
     aircraft.userData.prop.rotation.z += dt * (eng <= 0.05 ? 0 : (10 + controls.throttle * 60) * eng);
   }
   // Jet afterburner: the exhaust cone(s) glow with throttle (visible above ~70%).
-  if (vehicleType === 'plane' && !aircraft.userData.prop) {
+  if (!aircraft.userData.prop) {
     const ab = aircraft.userData.afterburners || (aircraft.userData.afterburner ? [aircraft.userData.afterburner] : []);
     const glow = sim.damage.engine > 0.05 ? Math.max(0, (controls.throttle - 0.55) / 0.45) : 0;
     const flicker = 0.85 + 0.15 * Math.sin(strobeT * 40);
@@ -1070,30 +921,6 @@ function loop(now) {
       cone.scale.setScalar(0.7 + glow * 0.6);
     }
   }
-  if (vehicleType === 'drone' && droneMesh) {
-    drone.spinDroneProps(droneMesh, dt, controls.throttle);
-  }
-
-  // Multiplayer outbound — broadcast our pose at 10 Hz when enabled.
-  if (mp.isActive()) {
-    const q = sim.orientation;
-    mp.maybeSend({
-      x: sim.position.x, y: sim.position.y, z: sim.position.z,
-      qx: q.x, qy: q.y, qz: q.z, qw: q.w,
-      vehicle: vehicleType,
-    }, now);
-  }
-  // Update peer ghosts (cheap NPC mesh).
-  mp.tickPeers(scene, () => {
-    // Reuse the same NPC visual as AI traffic.
-    const ghost = (function() {
-      const g = new THREE.Group();
-      g.add(aircraft.clone(true));
-      g.scale.setScalar(0.85);
-      return g;
-    })();
-    return ghost;
-  }, dt);
 
   // Anti-collision strobe on the tail — alternates every 0.6 s.
   strobeT += dt;
@@ -1105,7 +932,6 @@ function loop(now) {
   emitOngoingEffects(now);
   tickEffects(effects, dt);
   updateCamera(camera, getActiveVehicleMesh(), camRig, dt);
-    updateCockpit();
 
   // Audio: continuous channels follow the live sim state.
   audio.setEngine(controls.throttle, sim.damage.engine);
@@ -1602,7 +1428,7 @@ function pushHud() {
     status: sim.status + (controls.paused ? ' · PAUSED' : ''),
     qgcOnline: isBridgeOnline(),
     navDegraded,
-    mode: apActive ? `AUTO·${apPhase}` : 'MANUAL',
+    mode: !armed ? 'DISARMED' : (apActive ? `AUTO·${apPhase}` : 'MANUAL'),
     missionSeq: apActive ? apSeq : null,
     missionLen: apLen,
     damage: sim.damage,
@@ -1611,22 +1437,6 @@ function pushHud() {
     hitl: hitlEngaged,
     padConnected: isPadConnected(),
     audioMuted: audio.isStarted() ? !audio.isAudible() : false,
-    scenario: (() => {
-      const sa = scenario.getActive();
-      if (!sa) return null;
-      const obj = scenario.getCurrentObjective();
-      const courseName = scenario.listCourses().find(c => c.id === sa.courseId)?.name || '';
-      let objText;
-      if (sa.completed) {
-        objText = `COMPLETE · ${sa.totalSeconds.toFixed(1)}s · +${sa.timeBonus} time bonus`;
-      } else if (obj) {
-        objText = `${sa.idx + 1}. ${obj.name}`;
-      } else {
-        objText = '—';
-      }
-      return { title: courseName, objective: objText, score: sa.score };
-    })(),
-    multiplayer: mp.isActive() ? { peers: mp.getPeerCount() } : null,
   });
 
   // Send telemetry to MAVLink bridge (no-op when bridge offline). We send the
@@ -1648,6 +1458,10 @@ function pushHud() {
     throttle01: controls.throttle,
     vsi: sim.vsi,
     missionSeq: apActive ? apSeq : -1,
+    // The sim is authoritative for mode/arm — the bridge maps these into the
+    // HEARTBEAT so the GCS shows the vehicle's TRUE state (M2).
+    mode: apActive ? 'AUTO' : 'MANUAL',
+    armed,
   };
   maybeSend(mergeMeasuredIntoTelemetry(truthTelemetry, measured), performance.now());
 
