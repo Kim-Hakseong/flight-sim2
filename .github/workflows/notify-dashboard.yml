@@ -1,0 +1,29 @@
+# 이 파일은 각 "프로젝트 repo"의 .github/workflows/notify-dashboard.yml 에 둔다.
+# (nexys-blockly-studio, flight-sim2 양쪽 모두)
+# repo 비밀변수 DASHBOARD_DISPATCH_TOKEN 필요:
+#   - dev-dashboard repo에 대한 contents:write 권한 fine-grained PAT (또는 classic repo scope)
+#   - 토큰이 없으면 이 워크플로는 빨간 실패 대신 "스킵"하고 통과한다(아래 가드).
+name: Notify Dashboard
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger dashboard rebuild
+        env:
+          TOKEN: ${{ secrets.DASHBOARD_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "DASHBOARD_DISPATCH_TOKEN secret 미설정 — 대시보드 알림 스킵"
+            exit 0
+          fi
+          curl -sf -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/Kim-Hakseong/dev-dashboard/dispatches" \
+            -d '{"event_type":"project-updated"}'
+          echo "대시보드 재빌드 트리거 완료"
