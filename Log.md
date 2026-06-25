@@ -234,3 +234,35 @@ exactly the reported symptom: arrows flew/rolled the jet, but R/M/N/B did nothin
 **Notes**:
 - User workaround no longer needed, but for the record: pressing 한/영 to English also fixes
   it. The e.code fix means flying works regardless of IME state.
+
+## 2026-06-25 — M4: GCS parameters (PARAM_REQUEST_LIST / READ / SET)
+
+**Status**: GREEN
+**Files changed**: bridge/mavlink.mjs, bridge/server.mjs, src/params.js (new), src/autopilot.js,
+  src/main.js, src/missionLink.js, tests/{mavlink,params,autopilot}.test.mjs,
+  tests/gcs-param-check.mjs (new), tests/gcs-browser-check.mjs
+**Tests**: 211 unit PASS · console 0 · autoland PASS · gcs-loop 13/13 · gcs-param 8/8 (deterministic, 3×)
+**Decisions**:
+- The GCS can now read & live-tune 8 parameters over MAVLink: 6 autopilot gains
+  (AP_HDG2BANK, AP_ALT2PITCH, AP_MAXBANK, AP_TGT_SPEED, AP_PITCH_KP, AP_ROLLRATEKP) +
+  2 sensor-noise sigmas (SNS_GPS_NOISE, SNS_GYRO_NOISE).
+- Shared canonical table in src/params.js (PURE module — bridge + sim both import it;
+  defaults match the live constants so an untuned sim flies bit-identically → autoland
+  determinism preserved). Exposed AP gains as `let` + autopilot.setGain() so the
+  controller body is untouched.
+- Protocol (CLAUDE.md §4): decode PARAM_REQUEST_LIST(21)/READ(20)/SET(23) in mavlink.mjs
+  (+unit tests); bridge streams PARAM_VALUE, clamps+stores on SET, echoes the (clamped)
+  value, and relays 'param_set' to the sim over SSE; missionLink applies it via main.js
+  applyParam → autopilot.setGain / SENSOR_CFG. Overrides are re-sent on SSE (re)connect.
+- Also disabled Nagle (setNoDelay) + flushHeaders on the SSE response — small SSE events
+  were being coalesced/delayed, a real latency win for the live link.
+**Next**:
+- (optional) lean graphics jump (procedural heightmap terrain + detail normals) — user-requested follow-up.
+**Notes**:
+- Deterministic M4 coverage = gcs-param-check (bridge half, real UDP) + the mavlink/params/
+  autopilot unit tests. The browser half (gcs-browser-check) exercises the full UDP→SSE→sim
+  loop and passes 8/8 when the EventSource connects, but the HEADLESS Chrome EventSource
+  is occasionally a "zombie" (connects, receives nothing) — a known environment flake that
+  predates M4 and hits all SSE events equally. Added link-online wait + idempotent re-send
+  retries to reduce it; not 100% in headless. Local QGC tuning to verify against a real GCS.
+- Tune locally without a GCS: window.__params.list() / .set('AP_TGT_SPEED', 70).

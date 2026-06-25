@@ -27,6 +27,9 @@ import {
   decodeMissionItemInt,
   decodeCommandLong,
   decodeCommandInt,
+  decodeParamRequestList,
+  decodeParamRequestRead,
+  decodeParamSet,
   decode,
 } from '../bridge/mavlink.mjs';
 
@@ -407,4 +410,53 @@ test('decodeCommandInt: DO_REPOSITION lat/lon (int32·1e7) + z', () => {
   assert.ok(Math.abs(got.x / 1e7 - 37.49) < 1e-6);
   assert.ok(Math.abs(got.y / 1e7 - 126.46) < 1e-6);
   assert.equal(got.z, 200);
+});
+
+// ---- PARAM_* decoders (M4) — GCS reads/tunes our autopilot gains + sensor noise ----
+
+test('decodeParamRequestList: target_system/component (PARAM_REQUEST_LIST id=21)', () => {
+  const payload = new Uint8Array([1, 0]); // target_system=1, target_component=0
+  const got = decodeParamRequestList(payload);
+  assert.equal(got.target_system, 1);
+  assert.equal(got.target_component, 0);
+});
+
+test('decodeParamRequestRead: param_index(i16) + param_id char[16] (id=20)', () => {
+  // Reordered v1 layout: param_index(i16)@0, target_system@2, target_component@3, param_id[16]@4
+  const payload = new Uint8Array(20);
+  const dv = new DataView(payload.buffer);
+  dv.setInt16(0, -1, true);      // index -1 → "look up by name"
+  payload[2] = 1; payload[3] = 0;
+  const id = 'AP_PITCH_KP';
+  for (let i = 0; i < id.length; i++) payload[4 + i] = id.charCodeAt(i);
+  const got = decodeParamRequestRead(payload);
+  assert.equal(got.param_index, -1);
+  assert.equal(got.target_system, 1);
+  assert.equal(got.param_id, 'AP_PITCH_KP');
+});
+
+test('decodeParamSet: param_value(f32) + param_id(char[16]) + type (id=23)', () => {
+  // Reordered: param_value(f32)@0, target_system@4, target_component@5, param_id[16]@6, param_type@22
+  const payload = new Uint8Array(23);
+  const dv = new DataView(payload.buffer);
+  dv.setFloat32(0, 2.5, true);
+  payload[4] = 1; payload[5] = 0;
+  const id = 'AP_PITCH_KP';
+  for (let i = 0; i < id.length; i++) payload[6 + i] = id.charCodeAt(i);
+  payload[22] = 9; // REAL32
+  const got = decodeParamSet(payload);
+  assert.ok(Math.abs(got.param_value - 2.5) < 1e-6);
+  assert.equal(got.param_id, 'AP_PITCH_KP');
+  assert.equal(got.param_type, 9);
+  assert.equal(got.target_system, 1);
+});
+
+test('decodeParamSet: a full 16-char param_id (no NUL terminator) reads all 16', () => {
+  const payload = new Uint8Array(23);
+  const dv = new DataView(payload.buffer);
+  dv.setFloat32(0, 1, true);
+  const id = 'ABCDEFGHIJKLMNOP'; // exactly 16
+  for (let i = 0; i < 16; i++) payload[6 + i] = id.charCodeAt(i);
+  payload[22] = 9;
+  assert.equal(decodeParamSet(payload).param_id, id);
 });

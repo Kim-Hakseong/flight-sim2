@@ -35,7 +35,8 @@ const GROUND_OFFSET   = 0.8;       // default gear height; overridden per-model 
                                    // simState.groundOffset (jets sit higher than the trainer)
 
 // Outer-loop limits.
-const MAX_BANK  = 25 * Math.PI / 180;   // 25° — coordinated, so sustainable; tight
+let   MAX_BANK  = 25 * Math.PI / 180;   // 25° — coordinated, so sustainable; tight
+                                        // (GCS-tunable via AP_MAXBANK, M4)
                                         // enough to navigate the waypoint spacing
 const APPROACH_BANK = 22 * Math.PI / 180;  // bank limit on the approach: enough to turn
                                         // onto the localiser at approach speed (15° is a
@@ -43,8 +44,9 @@ const APPROACH_BANK = 22 * Math.PI / 180;  // bank limit on the approach: enough
                                         // Partial approach flap keeps the energy to sustain it.
 const MAX_PITCH = 8 * Math.PI / 180;    // 8° — a sustainable climb at full power
 // Outer-loop gains.
-const HEADING_TO_BANK = 1.1;            // responsive heading→bank (turn coordinator
+let   HEADING_TO_BANK = 1.1;            // responsive heading→bank (turn coordinator
                                         // keeps it coordinated, so this can be brisk)
+                                        // (GCS-tunable via AP_HDG2BANK, M4)
 // Cross-track guidance (M22): in a crosswind, steering at the touchdown POINT
 // gives almost no lateral authority while far out (the bearing barely changes),
 // so the aircraft drifts downwind unbounded. Instead track the runway CENTRELINE
@@ -68,7 +70,7 @@ const MAX_INTERCEPT   = 30 * Math.PI / 180;  // cap the intercept/crab angle
 // Longitudinal control (classic separation): pitch holds altitude, throttle holds
 // airspeed. A hard speed guard forces the nose down below SAFE_SPEED so a climb or
 // turn can never stall; turn compensation adds back-pressure for the bank.
-const ALT_TO_PITCH    = 0.012;          // rad per metre of altitude error
+let   ALT_TO_PITCH    = 0.012;          // rad per metre of altitude error (AP_ALT2PITCH)
 const SAFE_SPEED      = 42;             // m/s — below this, pitch is forced down
 const SPEED_PROT_GAIN = 0.03;           // rad per m/s below SAFE_SPEED
 const TURN_COMP       = 0.55;           // back-pressure ∝ (1/cos(bank) − 1)
@@ -87,8 +89,8 @@ const THR_FLOOR       = 0.15;           // allows cruise/descent without overspe
 // without overshooting into an unsustainable high-bank, speed-bleeding turn.
 const BANK_TO_RATE  = 1.2;   // (rad/s) desired roll rate per rad of bank error
 const MAX_ROLL_RATE = 0.25;  // rad/s — gentle roll-in (~14°/s)
-const ROLL_RATE_KP  = 2.5;   // aileron per (rad/s) roll-rate error
-const PITCH_KP = 1.0;
+let   ROLL_RATE_KP  = 2.5;   // aileron per (rad/s) roll-rate error (AP_ROLLRATEKP)
+let   PITCH_KP = 1.0;        // pitch inner-loop P (AP_PITCH_KP)
 const PITCH_RATE_KD = 1.0;
 const rollToBank = (targetBank, bankRad, rollRate) => {
   const desiredRollRate = clamp((targetBank - bankRad) * BANK_TO_RATE, -MAX_ROLL_RATE, MAX_ROLL_RATE);
@@ -123,7 +125,7 @@ const yawCommand = (rollCmd, bankRad, yawRate, speed, qScale = 1) => {
     -YAW_LIMIT, YAW_LIMIT);
 };
 
-const TARGET_SPEED = 50;     // m/s cruise
+let   TARGET_SPEED = 50;     // m/s cruise (AP_TGT_SPEED)
 const REF_SPEED    = 44;     // m/s — gain-scheduling reference (gains tuned here)
 
 // ----- Landing (M20): glideslope approach → flare → touchdown -----
@@ -179,6 +181,23 @@ export function getCurrentSeq() { return currentSeq; }
 export function getMissionLength() { return mission ? mission.items.length : 0; }
 export function hasMission() { return !!(mission && mission.items.length > 0); }
 export function getPhase() { return phase; }
+
+// M4: live-tune a guidance/control gain from a GCS PARAM_SET. The controller body
+// reads these as plain module variables, so a set takes effect on the next tick.
+// AP_MAXBANK is GCS-facing in degrees; stored internally in radians. Unknown ids
+// are ignored. Returns true if applied.
+export function setGain(id, value) {
+  if (!Number.isFinite(value)) return false;
+  switch (id) {
+    case 'AP_HDG2BANK':   HEADING_TO_BANK = value; return true;
+    case 'AP_ALT2PITCH':  ALT_TO_PITCH = value;    return true;
+    case 'AP_MAXBANK':    MAX_BANK = value * Math.PI / 180; return true;
+    case 'AP_TGT_SPEED':  TARGET_SPEED = value;    return true;
+    case 'AP_PITCH_KP':   PITCH_KP = value;        return true;
+    case 'AP_ROLLRATEKP': ROLL_RATE_KP = value;    return true;
+    default: return false;
+  }
+}
 
 /**
  * simState fields:

@@ -15,6 +15,11 @@ let es = null;
 let nav = {};
 export function setNavHandlers(handlers) { nav = handlers || {}; }
 
+// GCS parameter set (M4): main.js registers a handler that applies (id,value) to
+// the autopilot gains / sensor noise. Set on the same EventSource as the rest.
+let onParam = null;
+export function setParamHandler(fn) { onParam = fn; }
+
 export function isMissionLinkOnline() { return online; }
 export function getEventSource() { return es; }
 
@@ -80,5 +85,11 @@ export function connect(defaultHome) {
   });
   es.addEventListener('goto', (e) => {
     try { const d = JSON.parse(e.data); if (freshNav(d) && nav.goto) nav.goto(d.lat, d.lon, d.alt || 0); } catch {}
+  });
+
+  // GCS parameter set (M4). Idempotent (just assigns a gain), so no __seq dedupe
+  // needed — the bridge re-sends overrides on reconnect to catch a late sim.
+  es.addEventListener('param_set', (e) => {
+    try { const d = JSON.parse(e.data); if (onParam && d && d.id) onParam(d.id, d.value); } catch {}
   });
 }

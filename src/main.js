@@ -11,7 +11,8 @@ import { initHud, updateHud, setHudEngMode } from './hud.js';
 import { initEngineering } from './engineering.js';
 import { maybeSend, isBridgeOnline, mergeMeasuredIntoTelemetry } from './telemetry.js';
 import * as autopilot from './autopilot.js';
-import { connect as connectMissionLink, setNavHandlers } from './missionLink.js';
+import { connect as connectMissionLink, setNavHandlers, setParamHandler } from './missionLink.js';
+import { setParam as storeParam, getParam as readParam, listParams } from './params.js';
 import {
   createColliders,
   checkAircraft,
@@ -30,7 +31,7 @@ import {
 import * as hitl from './hitl.js';
 import * as audio from './audio.js';
 import { pollGamepad, isConnected as isPadConnected } from './gamepad.js';
-import { getEventSource } from './missionLink.js';
+import { getEventSource, isMissionLinkOnline } from './missionLink.js';
 import {
   airDensity,
   liftCoefficient,
@@ -763,8 +764,29 @@ function navRtl() {
   autopilot.setMission([home], HOME); autopilot.startMission(); autopilot.setLoiter(true);
 }
 setNavHandlers({ takeoff: navTakeoff, goto: navGoto, land: navLand, rtl: navRtl });
+
+// M4: apply a GCS PARAM_SET to the live sim. Clamp+store in the shared table, then
+// route to its target — autopilot gains (AP_*) or the sensor-noise model (SNS_*).
+function applyParam(id, value) {
+  const v = storeParam(id, Number(value));   // clamped to the param's range
+  if (v == null) return;
+  if (id.startsWith('AP_')) {
+    autopilot.setGain(id, v);
+  } else if (id === 'SNS_GPS_NOISE') {
+    SENSOR_CFG.gpsX.noise = v; SENSOR_CFG.gpsZ.noise = v;
+  } else if (id === 'SNS_GYRO_NOISE') {
+    SENSOR_CFG.p.noise = v; SENSOR_CFG.q.noise = v; SENSOR_CFG.r.noise = v;
+  }
+  console.log(`[param] ${id} = ${v}`);
+}
+setParamHandler(applyParam);
 if (typeof window !== 'undefined') {
   window.__nav = { takeoff: navTakeoff, goto: navGoto, land: navLand, rtl: navRtl };
+  // Inspect/tune params locally (mirrors what the GCS does over MAVLink).
+  window.__params = { list: listParams, get: readParam, set: applyParam };
+  // SSE link state — lets headless checks wait until the EventSource is actually
+  // connected before broadcasting (avoids racing the handshake).
+  window.__linkOnline = () => isMissionLinkOnline();
 }
 
 function resetAircraft() {

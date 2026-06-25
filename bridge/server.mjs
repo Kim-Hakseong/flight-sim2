@@ -36,7 +36,18 @@ import {
   decodeMissionItemInt,
   decodeCommandLong,
   decodeCommandInt,
+  decodeParamRequestList,
+  decodeParamRequestRead,
+  decodeParamSet,
 } from './mavlink.mjs';
+import {
+  listParams,
+  paramCount,
+  getParamByIndex,
+  getParamEntry,
+  setParam as storeParam,
+  getOverrides,
+} from '../src/params.js';
 
 // MAV_MODE_FLAG bits (subset).
 const MODE_CUSTOM   = 0x01;
@@ -218,12 +229,18 @@ const server = createServer((req, res) => {
 
   // SSE: stream commands (mission, mode, etc.) from bridge to browser.
   if (req.method === 'GET' && req.url === '/commands') {
+    // Disable Nagle: SSE events are tiny, and Nagle can hold a small write in the
+    // kernel for ~40ms waiting to coalesce — long enough that a client (notably a
+    // headless-Chrome EventSource) appears connected but never receives anything
+    // (the "zombie EventSource"). setNoDelay flushes each event immediately.
+    if (res.socket) res.socket.setNoDelay(true);
     res.writeHead(200, {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache, no-transform',
       'connection': 'keep-alive',
       'access-control-allow-origin': '*',
     });
+    if (res.flushHeaders) res.flushHeaders();
     res.write(': connected\n\n');
     sseClients.add(res);
     // If a mission was already received before the browser connected, send it now.
@@ -235,6 +252,11 @@ const server = createServer((req, res) => {
     // missed; the sim dedupes by __seq, so a stale re-send is a no-op.
     if (lastNav) {
       try { res.write(`event: ${lastNav.event}\ndata: ${JSON.stringify(lastNav.data)}\n\n`); } catch {}
+    }
+    // Re-send any tuned parameters so a late/reconnecting sim picks them up (M4).
+    // Applying a gain is idempotent, so re-sending is safe.
+    for (const o of getOverrides()) {
+      try { res.write(`event: param_set\ndata: ${JSON.stringify(o)}\n\n`); } catch {}
     }
     req.on('close', () => sseClients.delete(res));
     return;
@@ -371,11 +393,14 @@ function handleIncoming(p) {
   switch (p.msgId) {
     case 0:    // HEARTBEAT (from GCS) — silent
       break;
-    case 21:   // PARAM_REQUEST_LIST → respond with our (single) param
+    case 21:   // PARAM_REQUEST_LIST → stream every parameter
       respondParamList();
       break;
-    case 20:   // PARAM_REQUEST_READ → re-send our single param
-      respondParamList();
+    case 20:   // PARAM_REQUEST_READ → one parameter (by index or by name)
+      handleParamRequestRead(p);
+      break;
+    case 23:   // PARAM_SET → tune a parameter, relay to the sim, echo the new value
+      handleParamSet(p);
       break;
     case 43:   // MISSION_REQUEST_LIST (download from us) → respond empty
       respondMissionEmpty(p.sys, p.comp);
@@ -417,14 +442,38 @@ function handleSetMode(p) {
   console.log(`[bridge] SET_MODE base=0x${base.toString(16)}`);
 }
 
-function respondParamList() {
+// ----- Parameters (M4): the GCS reads/tunes autopilot gains + sensor noise -----
+
+function sendParamValue(entry) {
   send(encodeParamValue({
-    paramId: 'SIM_INFO',
-    paramValue: 1.0,
-    paramType: 9,        // REAL32
-    paramCount: 1,
-    paramIndex: 0,
+    paramId: entry.id,
+    paramValue: entry.value,
+    paramType: 9,            // REAL32
+    paramCount: paramCount(),
+    paramIndex: entry.index,
   }));
+}
+
+function respondParamList() {
+  for (const entry of listParams()) sendParamValue(entry);
+}
+
+function handleParamRequestRead(p) {
+  const r = decodeParamRequestRead(p.payload);
+  // QGC uses param_index = -1 to mean "look up by name".
+  const entry = r.param_index >= 0 ? getParamByIndex(r.param_index) : getParamEntry(r.param_id);
+  if (entry) sendParamValue(entry);
+}
+
+function handleParamSet(p) {
+  const s = decodeParamSet(p.payload);
+  const value = storeParam(s.param_id, s.param_value);
+  if (value == null) return;             // unknown id — ignore
+  // Relay to the sim (applies the gain live) …
+  broadcast('param_set', { id: s.param_id, value });
+  // … and echo PARAM_VALUE so the GCS confirms the (possibly clamped) value.
+  sendParamValue(getParamEntry(s.param_id));
+  console.log(`[bridge] PARAM_SET ${s.param_id} = ${value}`);
 }
 
 function respondMissionEmpty(targetSys, targetComp) {

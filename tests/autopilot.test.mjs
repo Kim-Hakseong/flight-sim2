@@ -80,3 +80,21 @@ test('turn coordinator: commands rudder in a bank (β-free coordinated turn)', (
   const out = ap.tick({ ...navState(50), bankRad: 0.3 }); // established right bank
   assert.ok(Math.abs(out.yaw) > 1e-3, `bank should produce coordinating rudder, got ${out.yaw}`);
 });
+
+// ---- M4: GCS-tunable gains wire into the live controller (PARAM_SET path) ----
+
+test('setGain AP_TGT_SPEED raises cruise throttle (param reaches the loop)', () => {
+  startNav();
+  const baseThr = ap.tick(navState(50)).throttle;
+  ap.setGain('AP_TGT_SPEED', 80);     // demand more speed → more throttle at the same speed
+  startNav();
+  const hiThr = ap.tick(navState(50)).throttle;
+  ap.setGain('AP_TGT_SPEED', 50);     // restore the default for any later tests
+  assert.ok(hiThr > baseThr, `higher target speed → more throttle (${hiThr} > ${baseThr})`);
+});
+
+test('setGain returns true for known ids, false for unknown', () => {
+  assert.equal(ap.setGain('AP_PITCH_KP', 1.0), true);   // known (and a no-op at default)
+  assert.equal(ap.setGain('NOT_A_PARAM', 5), false);    // unknown id ignored
+  assert.equal(ap.setGain('AP_PITCH_KP', NaN), false);  // non-finite ignored
+});

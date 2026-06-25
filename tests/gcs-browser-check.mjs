@@ -34,6 +34,13 @@ function commandLong(command) {
   dv.setUint16(28, command, true); b[30] = 1; b[31] = 1;
   return encodePacket({ msgId: 76, payload: b, crcExtra: 152, sys: 255, comp: 190 });
 }
+function paramSet(id, value) {
+  const b = new Uint8Array(23); const dv = new DataView(b.buffer);
+  dv.setFloat32(0, value, true); b[4] = 1; b[5] = 1;
+  for (let i = 0; i < id.length && i < 16; i++) b[6 + i] = id.charCodeAt(i);
+  b[22] = 9;
+  return encodePacket({ msgId: 23, payload: b, crcExtra: 168, sys: 255, comp: 190 });
+}
 
 // ---- CDP helper ----
 async function cdp() {
@@ -68,29 +75,43 @@ try {
 
   const { ev } = await cdp();
   await ev(`location.href = 'http://localhost:${HTTP}/index.html?intro=0'`); // load sim FROM the bridge
-  // poll until main.js has run AND missionLink's SSE is connected (re-sends fire on connect)
-  let sseOk = false;
-  for (let i = 0; i < 30; i++) { if (await ev(`!!window.__hils`)) { sseOk = true; break; } await sleep(300); }
-  await sleep(1000); // let the EventSource finish its handshake before we broadcast
-  check('sim loaded from bridge', sseOk);
+  // poll until main.js has run …
+  let loaded = false;
+  for (let i = 0; i < 30; i++) { if (await ev(`!!window.__hils`)) { loaded = true; break; } await sleep(300); }
+  // … AND the EventSource is actually CONNECTED. Broadcasting before the handshake
+  // completes drops the event (the client isn't in sseClients yet) — that race is
+  // what made this check flaky. window.__linkOnline() flips true once 'open' fires,
+  // by which point the bridge has already added the client, so delivery is assured.
+  let linkUp = false;
+  for (let i = 0; i < 40; i++) { if (await ev(`window.__linkOnline && window.__linkOnline()`)) { linkUp = true; break; } await sleep(150); }
+  await sleep(200);
+  check('sim loaded from bridge', loaded && linkUp, linkUp ? '' : '(SSE link never came online)');
   check('autopilot starts with no mission', (await ev(`window.__hils.auto.len`)) === 0, `(len=${await ev(`window.__hils.auto.len`)})`);
 
-  // upload mission over UDP
-  toBridge(encodeMissionCount({ targetSystem: 1, targetComponent: 1, count: 2 }));
-  await sleep(300);
-  toBridge(missionItemInt({ seq: 0, lat: HOME.lat + 0.01, lon: HOME.lon, alt: 150 }));
-  await sleep(300);
-  toBridge(missionItemInt({ seq: 1, lat: HOME.lat + 0.02, lon: HOME.lon + 0.01, alt: 150 }));
-  // poll for the SSE mission to land on the browser autopilot
-  let len = 0;
-  for (let i = 0; i < 20; i++) { len = await ev(`window.__hils.auto.len`); if (len >= 2) break; await sleep(250); }
-  check('browser autopilot received the mission (SSE)', len >= 2, `(len=${len})`);
+  // Re-send the UDP command each attempt until its SSE effect lands on the browser.
+  // The bridge handlers are idempotent (the mission handshake / mode / param relay
+  // re-broadcast on every receipt), so a re-send simply triggers a fresh broadcast —
+  // robust against the headless EventSource occasionally dropping the first event.
+  const until = async (predicate, sendFn, tries = 8, gap = 350) => {
+    for (let i = 0; i < tries; i++) {
+      sendFn(); await sleep(gap);
+      if (await predicate()) return true;
+    }
+    return false;
+  };
+
+  // upload mission over UDP (whole handshake re-sent per attempt)
+  const uploadMission = () => {
+    toBridge(encodeMissionCount({ targetSystem: 1, targetComponent: 1, count: 2 }));
+    setTimeout(() => toBridge(missionItemInt({ seq: 0, lat: HOME.lat + 0.01, lon: HOME.lon, alt: 150 })), 80);
+    setTimeout(() => toBridge(missionItemInt({ seq: 1, lat: HOME.lat + 0.02, lon: HOME.lon + 0.01, alt: 150 })), 160);
+  };
+  const gotMission = await until(async () => (await ev(`window.__hils.auto.len`)) >= 2, uploadMission);
+  check('browser autopilot received the mission (SSE)', gotMission, `(len=${await ev(`window.__hils.auto.len`)})`);
 
   // start mission over UDP
-  toBridge(commandLong(300));
-  let active = false;
-  for (let i = 0; i < 20; i++) { active = await ev(`window.__hils.auto.active`); if (active) break; await sleep(250); }
-  check('autopilot engaged on MISSION_START', !!active, `(phase=${await ev(`window.__hils.auto.phase`)})`);
+  const active = await until(async () => !!(await ev(`window.__hils.auto.active`)), () => toBridge(commandLong(300)));
+  check('autopilot engaged on MISSION_START', active, `(phase=${await ev(`window.__hils.auto.phase`)})`);
 
   // let the browser fly real-time; confirm telemetry round-trips back to the GCS
   rx.length = 0;
@@ -98,13 +119,16 @@ try {
   check('browser telemetry reaches the GCS (GLOBAL_POSITION_INT)', got(33).length > 0, `(${got(33).length} frames)`);
 
   // GCS DISARM (COMMAND_LONG 400, param1=0) must cut the sim's engine
-  toBridge(commandLong(400));
-  let disarmed = false;
-  for (let i = 0; i < 20; i++) { if ((await ev(`window.__arm()`)) === false) { disarmed = true; break; } await sleep(250); }
+  const disarmed = await until(async () => (await ev(`window.__arm()`)) === false, () => toBridge(commandLong(400)));
   check('GCS DISARM disarms the sim', disarmed);
   await sleep(600);
   const thr = await ev(`window.__hils.diag.thr`);
   check('DISARM cuts the throttle to 0', thr === 0, `(thr=${thr})`);
+
+  // GCS PARAM_SET (M4) over UDP → bridge SSE → the sim applies the gain live.
+  const applied = await until(async () => (await ev(`window.__params.get('AP_TGT_SPEED')`)) === 70,
+    () => toBridge(paramSet('AP_TGT_SPEED', 70)));
+  check('GCS PARAM_SET reaches & tunes the sim', applied, `(AP_TGT_SPEED=${await ev(`window.__params.get('AP_TGT_SPEED')`)})`);
 
   sock.close();
 } finally {

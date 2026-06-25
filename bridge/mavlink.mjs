@@ -354,6 +354,50 @@ export function decodeCommandInt(payload) {
   };
 }
 
+// Read a MAVLink char[N] field (param_id etc.) — ASCII, NUL-terminated unless it
+// fills all N bytes. Returns the trimmed string.
+function readCharArray(payload, offset, n) {
+  let s = '';
+  for (let i = 0; i < n; i++) {
+    const c = payload[offset + i];
+    if (!c) break;              // NUL terminator
+    s += String.fromCharCode(c);
+  }
+  return s;
+}
+
+// ---- PARAM_* decoders (M4): the GCS reads and tunes our parameters ----
+
+// PARAM_REQUEST_LIST (id=21): target_system(u8), target_component(u8).
+export function decodeParamRequestList(payload) {
+  return { target_system: payload[0], target_component: payload[1] };
+}
+
+// PARAM_REQUEST_READ (id=20), v1 reorder: param_index(i16), target_system(u8),
+// target_component(u8), param_id(char[16]). param_index = -1 → look up by name.
+export function decodeParamRequestRead(payload) {
+  const dv = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  return {
+    param_index: dv.getInt16(0, true),
+    target_system: payload[2],
+    target_component: payload[3],
+    param_id: readCharArray(payload, 4, 16),
+  };
+}
+
+// PARAM_SET (id=23), v1 reorder: param_value(f32), target_system(u8),
+// target_component(u8), param_id(char[16]), param_type(u8).
+export function decodeParamSet(payload) {
+  const dv = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  return {
+    param_value: dv.getFloat32(0, true),
+    target_system: payload[4],
+    target_component: payload[5],
+    param_id: readCharArray(payload, 6, 16),
+    param_type: payload[22],
+  };
+}
+
 // ---- Decoder ----
 //
 // Returns an array of { version: 1|2, msgId, sys, comp, seq, payload } parsed
