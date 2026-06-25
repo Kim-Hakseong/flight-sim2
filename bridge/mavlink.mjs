@@ -165,6 +165,49 @@ export function encodeParamValue({
   return encodePacket({ msgId: 22, payload, crcExtra: 220, sys, comp, seq });
 }
 
+// ---- SYS_STATUS (id=1, len=31, crc_extra=124) ----
+// Reordered: sensors_present(u32), sensors_enabled(u32), sensors_health(u32),
+//   load(u16), voltage_battery(u16), current_battery(i16), drop_rate_comm(u16),
+//   errors_comm(u16), errors_count1..4(u16), battery_remaining(i8).
+// Sensor health bits (cleared = unhealthy) make injected HILS faults show red in QGC.
+export function encodeSysStatus({
+  sensorsPresent = 0, sensorsEnabled = 0, sensorsHealth = 0,
+  load = 0, voltageBattery = 0, currentBattery = -1,
+  dropRateComm = 0, errorsComm = 0,
+  errorsCount1 = 0, errorsCount2 = 0, errorsCount3 = 0, errorsCount4 = 0,
+  batteryRemaining = -1,
+  sys, comp, seq,
+}) {
+  const payload = makePayload(31, dv => {
+    dv.setUint32(0,  sensorsPresent >>> 0, true);
+    dv.setUint32(4,  sensorsEnabled >>> 0, true);
+    dv.setUint32(8,  sensorsHealth  >>> 0, true);
+    dv.setUint16(12, load, true);
+    dv.setUint16(14, voltageBattery, true);
+    dv.setInt16(16,  currentBattery, true);
+    dv.setUint16(18, dropRateComm, true);
+    dv.setUint16(20, errorsComm, true);
+    dv.setUint16(22, errorsCount1, true);
+    dv.setUint16(24, errorsCount2, true);
+    dv.setUint16(26, errorsCount3, true);
+    dv.setUint16(28, errorsCount4, true);
+    dv.setInt8(30,   batteryRemaining);
+  });
+  return encodePacket({ msgId: 1, payload, crcExtra: 124, sys, comp, seq });
+}
+
+// ---- STATUSTEXT (id=253, len=51, crc_extra=83) ----
+// Layout: severity(u8), text(char[50]). Surfaces fault events as GCS notifications.
+// severity: 0 EMERGENCY … 4 WARNING, 5 NOTICE, 6 INFO (MAV_SEVERITY).
+export function encodeStatustext({ severity = 6, text = '', sys, comp, seq }) {
+  const payload = makePayload(51, dv => {
+    dv.setUint8(0, severity);
+    const s = String(text).slice(0, 50);
+    for (let i = 0; i < 50; i++) dv.setUint8(1 + i, i < s.length ? s.charCodeAt(i) & 0x7F : 0);
+  });
+  return encodePacket({ msgId: 253, payload, crcExtra: 83, sys, comp, seq });
+}
+
 // ---- MISSION_COUNT (id=44, len=4, crc_extra=221) ----
 // Reordered: count(u16), target_system(u8), target_component(u8)
 export function encodeMissionCount({

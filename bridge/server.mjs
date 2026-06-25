@@ -22,6 +22,8 @@ import {
   encodeGlobalPosition,
   encodeVfrHud,
   encodeGpsRaw,
+  encodeSysStatus,
+  encodeStatustext,
   encodeParamValue,
   encodeMissionCount,
   encodeCommandAck,
@@ -114,6 +116,66 @@ function sendHeartbeat() {
 }
 setInterval(sendHeartbeat, 1000);
 sendHeartbeat();
+
+// ---------- HILS fault visibility (M5) ----------
+// Injected sensor faults (window.injectFault, arriving in telemetry.faults) are
+// surfaced to the GCS two ways: the matching SYS_STATUS sensor-health bit is cleared
+// (QGC shows the sensor red), and a STATUSTEXT notification fires on each edge.
+const SENSOR = {
+  GYRO: 1 << 0, ACCEL: 1 << 1, MAG: 1 << 2, ABS_PRESSURE: 1 << 3,
+  DIFF_PRESSURE: 1 << 4, GPS: 1 << 5, AHRS: 1 << 22,
+};
+// sim sensor channel → (MAVLink sensor bit, human label for STATUSTEXT)
+const CHANNEL = {
+  gpsX: [SENSOR.GPS, 'GPS'], gpsZ: [SENSOR.GPS, 'GPS'],
+  altitude: [SENSOR.ABS_PRESSURE, 'Baro'], airspeed: [SENSOR.DIFF_PRESSURE, 'Airspeed'],
+  heading: [SENSOR.MAG, 'Mag'], p: [SENSOR.GYRO, 'Gyro'], q: [SENSOR.GYRO, 'Gyro'], r: [SENSOR.GYRO, 'Gyro'],
+  pitch: [SENSOR.AHRS, 'AHRS'], roll: [SENSOR.AHRS, 'AHRS'],
+  // actuator faults aren't sensors — STATUSTEXT only (no health bit).
+  elevator: [0, 'Elevator'], aileron: [0, 'Aileron'], rudder: [0, 'Rudder'],
+};
+const SENSORS_PRESENT = SENSOR.GYRO | SENSOR.ACCEL | SENSOR.MAG | SENSOR.ABS_PRESSURE
+  | SENSOR.DIFF_PRESSURE | SENSOR.GPS | SENSOR.AHRS;
+
+let unhealthyMask = 0;            // sensor bits currently faulted
+let activeFaults = new Map();     // channel → type, for edge-detecting STATUSTEXT
+
+// Reconcile the latest fault set from telemetry: recompute the health mask and emit a
+// STATUSTEXT for each fault that just appeared or cleared.
+function updateFaults(faults = {}) {
+  let mask = 0;
+  const seen = new Set();
+  for (const [ch, type] of Object.entries(faults)) {
+    seen.add(ch);
+    const map = CHANNEL[ch];
+    if (map) mask |= map[0];
+    if (activeFaults.get(ch) !== type) {                       // new or changed
+      const label = (map && map[1]) || ch;
+      send(encodeStatustext({ severity: 4, text: `${label} fault: ${String(type).toUpperCase()} (${ch})` }));
+      console.log(`[bridge] FAULT ${ch} = ${type}`);
+    }
+  }
+  for (const [ch] of activeFaults) {                           // cleared
+    if (!seen.has(ch)) {
+      const label = (CHANNEL[ch] && CHANNEL[ch][1]) || ch;
+      send(encodeStatustext({ severity: 6, text: `${label} fault cleared (${ch})` }));
+      console.log(`[bridge] FAULT cleared ${ch}`);
+    }
+  }
+  unhealthyMask = mask;
+  activeFaults = new Map(Object.entries(faults));
+}
+
+function sendSysStatus() {
+  send(encodeSysStatus({
+    sensorsPresent: SENSORS_PRESENT,
+    sensorsEnabled: SENSORS_PRESENT,
+    sensorsHealth: SENSORS_PRESENT & ~unhealthyMask,
+    load: 200,                       // ~20% CPU (cosmetic)
+    voltageBattery: 12600, currentBattery: -1, batteryRemaining: 100,  // nominal (real battery = M6)
+  }));
+}
+setInterval(sendSysStatus, 1000);
 
 // ---------- SSE channel (bridge → browser) ----------
 
@@ -320,6 +382,9 @@ function relayTelemetry(t) {
     base |= t.mode === 'AUTO' ? MODE_AUTO : MODE_MANUAL;
     modeFlags = base;
   }
+
+  // HILS sensor faults → SYS_STATUS health bits + STATUSTEXT (M5).
+  if (t.faults) updateFaults(t.faults);
 
   // Sim coord → world geodetic.
   // Convention: sim +X = east, sim -Z = north, sim +Y = up.

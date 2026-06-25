@@ -290,3 +290,27 @@ exactly the reported symptom: arrows flew/rolled the jet, but R/M/N/B did nothin
 **Notes**:
 - Headless SwiftShader (software GL) under-renders IBL/SSAO/normal maps/bloom, so the gain
   shows on a real GPU, not in the CI screenshots. Toggle with 'B'.
+
+## 2026-06-25 — M5: HILS faults visible in the GCS (SYS_STATUS + STATUSTEXT)
+
+**Status**: GREEN
+**Files changed**: bridge/mavlink.mjs, bridge/server.mjs, src/main.js, tests/mavlink.test.mjs,
+  tests/gcs-faults-check.mjs (new)
+**Tests**: 214 unit PASS · console 0 · autoland PASS · gcs-loop 13/13 · gcs-param 8/8 · gcs-faults 8/8
+**Decisions**:
+- PRD M5 = HITL/HILS: external state injection + faults surfaced over MAVLink. The external
+  state-injection path already existed (/hitl/state + hitl.js, M9-era); the missing piece was
+  making injected SENSOR FAULTS visible in the GCS — done here.
+- New encoders SYS_STATUS(1) + STATUSTEXT(253) in mavlink.mjs (+unit tests, incl. the v1
+  field reorder and char[50] text).
+- The sim now reports active faults in telemetry (`faults: {channel: type}`). The bridge maps
+  each sim channel → a MAV_SYS_STATUS_SENSOR bit (gpsX/Z→GPS, altitude→Baro, airspeed→DiffP,
+  heading→Mag, p/q/r→Gyro, pitch/roll→AHRS) and clears that health bit (QGC shows the sensor
+  red), streaming SYS_STATUS at 1 Hz. On each fault edge it also fires a STATUSTEXT
+  ("GPS fault: FROZEN (gpsX)" / "GPS fault cleared (gpsX)").
+- Battery fields in SYS_STATUS are nominal (12.6 V / 100 %) for now — real battery is M6.
+**Next**:
+- M6 — telemetry completeness: real battery/EKF status, more STATUSTEXT, mission progress.
+**Notes**:
+- Try it: open QGC, inject a fault from the engineering console (or window.injectFault('gpsX',
+  {type:'frozen'})) — the GPS sensor goes red and a warning toast appears in QGC.

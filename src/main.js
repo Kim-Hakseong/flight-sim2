@@ -1553,6 +1553,11 @@ function pushHud() {
     // HEARTBEAT so the GCS shows the vehicle's TRUE state (M2).
     mode: apActive ? 'AUTO' : 'MANUAL',
     armed,
+    // Active HILS faults (M5): { channel: type } for each injected fault. The bridge
+    // turns these into SYS_STATUS sensor-health bits + STATUSTEXT so the GCS sees them.
+    faults: Object.fromEntries(
+      Object.entries(hilsFaults).filter(([, v]) => v).map(([k, v]) => [k, (v && v.type) || 'fault']),
+    ),
   };
   maybeSend(mergeMeasuredIntoTelemetry(truthTelemetry, measured), performance.now());
 

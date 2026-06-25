@@ -30,6 +30,8 @@ import {
   decodeParamRequestList,
   decodeParamRequestRead,
   decodeParamSet,
+  encodeSysStatus,
+  encodeStatustext,
   decode,
 } from '../bridge/mavlink.mjs';
 
@@ -459,4 +461,39 @@ test('decodeParamSet: a full 16-char param_id (no NUL terminator) reads all 16',
   for (let i = 0; i < 16; i++) payload[6 + i] = id.charCodeAt(i);
   payload[22] = 9;
   assert.equal(decodeParamSet(payload).param_id, id);
+});
+
+// ---- SYS_STATUS + STATUSTEXT (M5): HILS faults visible in the GCS ----
+
+test('encodeSysStatus: LEN=31, MSG=1, sensor bitmasks (u32×3) then battery', () => {
+  const pkt = encodeSysStatus({
+    sensorsPresent: 0x27, sensorsEnabled: 0x27, sensorsHealth: 0x07,  // GPS(0x20) unhealthy
+    load: 250, voltageBattery: 12600, currentBattery: -1, batteryRemaining: 100,
+  });
+  assert.equal(pkt[1], 31, 'LEN=31');
+  assert.equal(pkt[5], 1, 'MSG=SYS_STATUS(1)');
+  const dv = new DataView(pkt.buffer, pkt.byteOffset, pkt.byteLength);
+  assert.equal(dv.getUint32(6 + 0, true), 0x27, 'present');
+  assert.equal(dv.getUint32(6 + 4, true), 0x27, 'enabled');
+  assert.equal(dv.getUint32(6 + 8, true), 0x07, 'health (GPS bit cleared)');
+  assert.equal(dv.getUint16(6 + 12, true), 250, 'load');
+  assert.equal(dv.getUint16(6 + 14, true), 12600, 'voltage mV');
+  assert.equal(dv.getInt16(6 + 16, true), -1, 'current (unknown)');
+  assert.equal(dv.getInt8(6 + 30), 100, 'battery_remaining %');
+});
+
+test('encodeStatustext: LEN=51, MSG=253, severity + NUL-padded text[50]', () => {
+  const pkt = encodeStatustext({ severity: 4, text: 'GPS sensor FROZEN' });
+  assert.equal(pkt[1], 51);
+  assert.equal(pkt[5], 253);
+  assert.equal(pkt[6], 4, 'severity (WARNING)');
+  // text starts at payload offset 1 (after severity)
+  assert.equal(String.fromCharCode(pkt[7], pkt[8], pkt[9]), 'GPS');
+  assert.equal(pkt[6 + 1 + 'GPS sensor FROZEN'.length], 0, 'NUL terminated/padded');
+});
+
+test('encodeStatustext: text longer than 50 chars is truncated to 50', () => {
+  const long = 'x'.repeat(80);
+  const pkt = encodeStatustext({ severity: 6, text: long });
+  assert.equal(pkt[1], 51);  // 1 severity + 50 text
 });
