@@ -154,3 +154,20 @@ Append one entry per loop (format in CLAUDE.md §5). Newest at the bottom.
 - Live in QGC: arm → Takeoff slider → climbs; click "Go to location" → flies there + loiters;
   Return → comes home; Land → approaches the runway. Standard IDs; adjust if QGC sends
   SET_POSITION_TARGET for GUIDED on a generic autopilot.
+
+## 2026-06-25 — audio: realistic jet engine + remove engine exhaust smoke
+
+**Status**: GREEN (195 tests, console 0, autoland PASS)
+**Files changed**: src/audio.js (engine voices), src/main.js (drop exhaust emit)
+**Decisions**:
+- The old engine was two near-unison detuned sawtooths (80/84 Hz) that beat at a few
+  Hz — sounding like a chopping/broken helicopter, especially at ground idle. Replaced
+  with a 3-voice procedural jet/turbofan: a single low body tone (no beating), a turbine
+  whine that spools up ∝ throttle² (the "jet" character), and band-passed brown-noise
+  combustion roar. Smooth idle on the ground; full, flight-sim-like at power.
+- Removed the continuous engine **exhaust smoke** emission (clean jet, per request).
+  Damage smoke/fire remain but only fire if the airframe is damaged (never in this sim).
+**Next**:
+- Graphics quality options (no Unreal/Unity) — proposed to the user.
+**Notes**:
+- Audio still starts on first user gesture (browser policy); 'X' mutes.

@@ -1030,20 +1030,9 @@ function applyExternalState(ext) {
 const _emitTmp = new THREE.Vector3();
 
 function emitOngoingEffects(now) {
-  // Exhaust trail when the engine is producing thrust.
-  if (controls.throttle > 0.02 && sim.damage.engine > 0.05 && now - lastExhaustAt > 35) {
-    lastExhaustAt = now;
-    aircraft.localToWorld(_emitTmp.copy(aircraft.userData.anchors.exhaust));
-    // Eject puffs backward (body +Z) from the aircraft.
-    const back = tmpForward.set(0, 0, 1).applyQuaternion(sim.orientation);
-    effects.exhaust.emit(
-      _emitTmp.x, _emitTmp.y, _emitTmp.z,
-      sim.velocity.x + back.x * 4 + (Math.random() - 0.5) * 1,
-      sim.velocity.y + back.y * 4 + (Math.random() - 0.5) * 1,
-      sim.velocity.z + back.z * 4 + (Math.random() - 0.5) * 1,
-      0.6,
-    );
-  }
+  // No continuous engine exhaust smoke — a clean jet, per request. (Damage smoke /
+  // fire below still fire only if the airframe is actually damaged, which the GCS
+  // sim never does.)
 
   // Per-component damage smoke (thicker as HP drops).
   for (const [name, hpKey] of [['leftWing','leftWing'],['rightWing','rightWing'],['tail','tail'],['engine','engine']]) {

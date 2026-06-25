@@ -53,48 +53,57 @@ export function start() {
 
 // ---------- Engine ----------
 
+// Jet/turbofan-style, three layered voices so it reads as a real powerplant — NOT
+// a beating pair of near-unison oscillators (the old version detuned 80/84 Hz, which
+// at idle beat at a few Hz and sounded like a chopping helicopter):
+//   core  — a low body tone (rises with RPM)
+//   whine — a turbine whine (the "jet" character; rises steeply with RPM)
+//   roar  — band-passed brown noise (combustion air); brightens + loudens with throttle
 function setupEngine() {
-  const osc1 = ctx.createOscillator();
-  osc1.type = 'sawtooth';
-  osc1.frequency.value = 80;
+  const core = ctx.createOscillator(); core.type = 'sawtooth'; core.frequency.value = 60;
+  const coreLP = ctx.createBiquadFilter(); coreLP.type = 'lowpass'; coreLP.frequency.value = 500; coreLP.Q.value = 0.5;
+  const coreGain = ctx.createGain(); coreGain.gain.value = 0;
+  core.connect(coreLP); coreLP.connect(coreGain); coreGain.connect(masterGain); core.start();
 
-  const osc2 = ctx.createOscillator();
-  osc2.type = 'sawtooth';
-  osc2.frequency.value = 84; // detune for thicker timbre
+  const whine = ctx.createOscillator(); whine.type = 'triangle'; whine.frequency.value = 600;
+  const whineGain = ctx.createGain(); whineGain.gain.value = 0;
+  whine.connect(whineGain); whineGain.connect(masterGain); whine.start();
 
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.value = 800;
-  filter.Q.value = 0.7;
+  // brown noise (integrated white) — deeper, smoother roar than raw white noise
+  const len = 2 * ctx.sampleRate;
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  let lastN = 0;
+  for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; lastN = (lastN + 0.02 * w) / 1.02; d[i] = lastN * 3.2; }
+  const roar = ctx.createBufferSource(); roar.buffer = buf; roar.loop = true;
+  const roarBP = ctx.createBiquadFilter(); roarBP.type = 'bandpass'; roarBP.frequency.value = 200; roarBP.Q.value = 0.9;
+  const roarGain = ctx.createGain(); roarGain.gain.value = 0;
+  roar.connect(roarBP); roarBP.connect(roarGain); roarGain.connect(masterGain); roar.start();
 
-  const gain = ctx.createGain();
-  gain.gain.value = 0;
-
-  osc1.connect(filter);
-  osc2.connect(filter);
-  filter.connect(gain);
-  gain.connect(masterGain);
-  osc1.start(); osc2.start();
-
-  nodes.engine = { osc1, osc2, filter, gain };
+  nodes.engine = { core, coreLP, coreGain, whine, whineGain, roar, roarBP, roarGain };
 }
 
 /**
  * @param throttle 0..1
- * @param engineHp 0..1 — at low HP we drop volume + add growl by lowering the
- *                 filter cutoff (sounds choked / sputtering).
+ * @param engineHp 0..1 — subtly drops volume when the engine is degraded.
  */
 export function setEngine(throttle, engineHp = 1.0) {
   if (!started) return;
-  const t = ctx.currentTime;
-  const baseFreq = 60 + throttle * 240;        // 60..300 Hz
-  const damageWobble = (1 - engineHp) * (Math.random() * 8);
-  nodes.engine.osc1.frequency.setTargetAtTime(baseFreq + damageWobble, t, 0.04);
-  nodes.engine.osc2.frequency.setTargetAtTime(baseFreq * 1.05 - damageWobble, t, 0.04);
-  const targetGain = throttle * 0.16 * Math.max(0.15, engineHp);
-  nodes.engine.gain.gain.setTargetAtTime(targetGain, t, 0.05);
-  const cutoff = (300 + throttle * 1400) * Math.max(0.4, engineHp);
-  nodes.engine.filter.frequency.setTargetAtTime(cutoff, t, 0.05);
+  const t = ctx.currentTime, tau = 0.08;
+  const thr = Math.max(0, Math.min(1, throttle));
+  const hp = Math.max(0.3, engineHp);
+  const rpm = 0.12 + thr * 0.88;               // idle floor so it never sub-audibly buzzes
+  const e = nodes.engine;
+  // core body tone: 52 → 140 Hz (single voice — no beating)
+  e.core.frequency.setTargetAtTime(52 + rpm * 95, t, tau);
+  e.coreLP.frequency.setTargetAtTime(350 + thr * 1100, t, tau);
+  e.coreGain.gain.setTargetAtTime((0.025 + thr * 0.075) * hp, t, tau);
+  // turbine whine: 520 → 2600 Hz, grows ∝ throttle² for a spool-up feel
+  e.whine.frequency.setTargetAtTime(520 + rpm * 2100, t, tau);
+  e.whineGain.gain.setTargetAtTime((0.006 + thr * thr * 0.03) * hp, t, tau);
+  // combustion roar: brighter + louder with throttle
+  e.roarBP.frequency.setTargetAtTime(160 + thr * 520, t, tau);
+  e.roarGain.gain.setTargetAtTime((0.02 + thr * 0.11) * hp, t, tau);
 }
 
 // ---------- Wind ----------
