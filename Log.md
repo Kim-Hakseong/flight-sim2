@@ -314,3 +314,28 @@ exactly the reported symptom: arrows flew/rolled the jet, but R/M/N/B did nothin
 **Notes**:
 - Try it: open QGC, inject a fault from the engineering console (or window.injectFault('gpsX',
   {type:'frozen'})) — the GPS sensor goes red and a warning toast appears in QGC.
+
+## 2026-06-25 — M6: telemetry completeness (battery + EKF status + lifecycle text)
+
+**Status**: GREEN — completes the PRD GCS roadmap (M1–M6)
+**Files changed**: bridge/mavlink.mjs, bridge/server.mjs, src/main.js, tests/mavlink.test.mjs,
+  tests/gcs-telem-check.mjs (new)
+**Tests**: 215 unit · console 0 · autoland PASS · gcs-loop 13/13 · gcs-param 8/8 · gcs-faults 8/8 · gcs-telem 7/7
+**Decisions**:
+- Mission progress (MISSION_CURRENT / MISSION_ITEM_REACHED) was already live (M1/M3) — verified.
+- **Battery**: a deterministic drain model (BATTERY in main.js) integrated on the FIXED-STEP dt
+  (never wall clock → __advance stays reproducible). Draw scales with throttle (6 A idle → 45 A
+  full), voltage sags under load + falls with depletion. Reported in telemetry; the bridge fills
+  the real SYS_STATUS battery fields. Does NOT feed back into flight (autoland byte-identical).
+- **EKF_STATUS_REPORT(193)** (new encoder + test): the bridge emits it at 2 Hz from the sim's
+  nav health — healthy = low variances + the good ESTIMATOR_STATUS flags; nav-degraded (GPS
+  rejected by the FDE) raises pos variance and sets the GPS-glitch flag (QGC shows EKF amber/red).
+- **Lifecycle STATUSTEXT**: arm/disarm, MANUAL↔AUTO mode change, and nav degraded/recovered fire
+  a STATUSTEXT on each edge.
+**Next**:
+- PRD M1–M6 done. Backlog ideas: mission DOWNLOAD readback (GCS reads the vehicle's mission),
+  geofence, SET_MESSAGE_INTERVAL stream rates, RC override — propose before starting.
+**Notes**:
+- In QGC you now get a depleting battery gauge, an EKF status indicator that goes amber when you
+  inject a GPS fault (window.injectFault('gpsX',{type:'frozen'})), and toast notifications on
+  arm/mode/nav events.

@@ -208,6 +208,26 @@ export function encodeStatustext({ severity = 6, text = '', sys, comp, seq }) {
   return encodePacket({ msgId: 253, payload, crcExtra: 83, sys, comp, seq });
 }
 
+// ---- EKF_STATUS_REPORT (id=193, len=22, crc_extra=71) ----
+// Reordered: velocity_variance(f32), pos_horiz_variance(f32), pos_vert_variance(f32),
+//   compass_variance(f32), terrain_alt_variance(f32), flags(u16).
+// Variances are 0..1 (>0.5 reads "unhealthy" in QGC); flags = ESTIMATOR_STATUS_FLAGS.
+export function encodeEkfStatusReport({
+  flags = 0, velocityVariance = 0, posHorizVariance = 0, posVertVariance = 0,
+  compassVariance = 0, terrainAltVariance = 0,
+  sys, comp, seq,
+}) {
+  const payload = makePayload(22, dv => {
+    dv.setFloat32(0,  velocityVariance, true);
+    dv.setFloat32(4,  posHorizVariance, true);
+    dv.setFloat32(8,  posVertVariance, true);
+    dv.setFloat32(12, compassVariance, true);
+    dv.setFloat32(16, terrainAltVariance, true);
+    dv.setUint16(20,  flags, true);
+  });
+  return encodePacket({ msgId: 193, payload, crcExtra: 71, sys, comp, seq });
+}
+
 // ---- MISSION_COUNT (id=44, len=4, crc_extra=221) ----
 // Reordered: count(u16), target_system(u8), target_component(u8)
 export function encodeMissionCount({

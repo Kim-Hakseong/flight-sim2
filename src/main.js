@@ -500,6 +500,20 @@ const SENSOR_CFG = {
 //   injectFault('gpsX', {type:'frozen'})  /  clearFaults()
 const hilsFaults = {};
 const sensorRng = makeRng(0xC0FFEE);       // seeded → deterministic noise
+
+// Battery model (M6): a simple deterministic drain so the GCS shows a real,
+// depleting pack. Integrated on the FIXED-STEP dt (never wall clock) so the
+// __advance path stays reproducible. Draw scales with throttle; voltage sags under
+// load and falls with depletion. Does not feed back into flight (no electric prop).
+const BATTERY = { capacityAh: 5.0, consumedAh: 0, current: 6, voltage: 12.6, pct: 100 };
+function stepBattery(dt) {
+  const i = 6 + (controls.throttle || 0) * 39;          // 6 A idle → 45 A full
+  BATTERY.consumedAh += i * dt / 3600;
+  const frac = Math.max(0, 1 - BATTERY.consumedAh / BATTERY.capacityAh);
+  BATTERY.current = i;
+  BATTERY.voltage = (10.5 + 2.1 * frac) - 0.012 * i;    // depletion curve − load sag
+  BATTERY.pct = Math.round(frac * 100);
+}
 let measured = {};                         // latest measured (sensor) values
 
 // Sensor-in-the-loop (M11/M18): the autopilot flies on the navigation SOURCE below.
@@ -803,6 +817,7 @@ function resetAircraft() {
   sim.vsi = 0;
   sim.gForce = 1.0;
   controls.throttle = 0;
+  BATTERY.consumedAh = 0; BATTERY.current = 6; BATTERY.voltage = 12.6; BATTERY.pct = 100;  // fresh pack (M6)
   // Reset damage + restore visual parts hidden during the previous run.
   sim.damage = createDamageState();
   if (aircraft.userData.parts) {
@@ -850,6 +865,7 @@ function stepSimAndControl(dt) {
   // estimate first, so the autopilot flies on the selected navSource.
   updateSensors(dt);
   updateNavEstimate(dt);
+  stepBattery(dt);                          // deterministic battery drain (M6)
 
   // Truth attitude is computed directly from the orientation so the bank/pitch
   // sign convention is unambiguous:
@@ -1558,6 +1574,10 @@ function pushHud() {
     faults: Object.fromEntries(
       Object.entries(hilsFaults).filter(([, v]) => v).map(([k, v]) => [k, (v && v.type) || 'fault']),
     ),
+    // Telemetry completeness (M6): real battery + nav/estimator health → the bridge
+    // fills SYS_STATUS battery fields and emits EKF_STATUS_REPORT.
+    battV: BATTERY.voltage, battA: BATTERY.current, battPct: BATTERY.pct,
+    navDegraded,
   };
   maybeSend(mergeMeasuredIntoTelemetry(truthTelemetry, measured), performance.now());
 

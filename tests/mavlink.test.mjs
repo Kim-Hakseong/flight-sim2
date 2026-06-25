@@ -32,6 +32,7 @@ import {
   decodeParamSet,
   encodeSysStatus,
   encodeStatustext,
+  encodeEkfStatusReport,
   decode,
 } from '../bridge/mavlink.mjs';
 
@@ -496,4 +497,21 @@ test('encodeStatustext: text longer than 50 chars is truncated to 50', () => {
   const long = 'x'.repeat(80);
   const pkt = encodeStatustext({ severity: 6, text: long });
   assert.equal(pkt[1], 51);  // 1 severity + 50 text
+});
+
+// ---- EKF_STATUS_REPORT (M6): estimator/nav health to the GCS ----
+
+test('encodeEkfStatusReport: LEN=22, MSG=193, variances(f32×5) then flags(u16)', () => {
+  const pkt = encodeEkfStatusReport({
+    flags: 831, velocityVariance: 0.1, posHorizVariance: 0.2, posVertVariance: 0.15,
+    compassVariance: 0.05, terrainAltVariance: 0.0,
+  });
+  assert.equal(pkt[1], 22, 'LEN=22');
+  assert.equal(pkt[5], 193, 'MSG=EKF_STATUS_REPORT(193)');
+  const dv = new DataView(pkt.buffer, pkt.byteOffset, pkt.byteLength);
+  assert.ok(Math.abs(dv.getFloat32(6 + 0, true) - 0.1) < 1e-6, 'velocity_variance first (float)');
+  assert.ok(Math.abs(dv.getFloat32(6 + 4, true) - 0.2) < 1e-6, 'pos_horiz_variance');
+  assert.ok(Math.abs(dv.getFloat32(6 + 8, true) - 0.15) < 1e-6, 'pos_vert_variance');
+  assert.ok(Math.abs(dv.getFloat32(6 + 12, true) - 0.05) < 1e-6, 'compass_variance');
+  assert.equal(dv.getUint16(6 + 20, true), 831, 'flags last (u16)');
 });

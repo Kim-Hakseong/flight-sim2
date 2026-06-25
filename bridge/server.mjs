@@ -24,6 +24,7 @@ import {
   encodeGpsRaw,
   encodeSysStatus,
   encodeStatustext,
+  encodeEkfStatusReport,
   encodeParamValue,
   encodeMissionCount,
   encodeCommandAck,
@@ -166,16 +167,54 @@ function updateFaults(faults = {}) {
   activeFaults = new Map(Object.entries(faults));
 }
 
+// Telemetry completeness (M6): real battery + nav/estimator health, fed from telemetry.
+let battery = { mV: 12600, cA: -1, pct: 100 };
+let ekf = { degraded: false };
+
 function sendSysStatus() {
   send(encodeSysStatus({
     sensorsPresent: SENSORS_PRESENT,
     sensorsEnabled: SENSORS_PRESENT,
     sensorsHealth: SENSORS_PRESENT & ~unhealthyMask,
     load: 200,                       // ~20% CPU (cosmetic)
-    voltageBattery: 12600, currentBattery: -1, batteryRemaining: 100,  // nominal (real battery = M6)
+    voltageBattery: battery.mV, currentBattery: battery.cA, batteryRemaining: battery.pct,
   }));
 }
 setInterval(sendSysStatus, 1000);
+
+// EKF_STATUS_REPORT at 2 Hz. Healthy → low variances + the full set of "good" flags;
+// nav-degraded (GPS rejected by the FDE) → raise pos variance + flag a GPS glitch.
+const EKF_OK = 1 | 2 | 4 | 8 | 16 | 32 | 256 | 512;   // attitude+vel+pos(rel/abs)+predicted
+const EKF_GPS_GLITCH = 1024;
+function sendEkfStatus() {
+  const bad = ekf.degraded;
+  send(encodeEkfStatusReport({
+    flags: bad ? (EKF_OK | EKF_GPS_GLITCH) : EKF_OK,
+    velocityVariance: bad ? 0.7 : 0.12,
+    posHorizVariance: bad ? 0.85 : 0.15,
+    posVertVariance: bad ? 0.4 : 0.1,
+    compassVariance: 0.05,
+    terrainAltVariance: 0.0,
+  }));
+}
+setInterval(sendEkfStatus, 500);
+
+// Vehicle lifecycle notifications (M6): arm/disarm, mode, nav health — STATUSTEXT on edges.
+let lastArmed = null, lastMode = null, lastDegraded = false;
+function lifecycleNotify(t) {
+  if (typeof t.armed === 'boolean' && t.armed !== lastArmed) {
+    if (lastArmed !== null) send(encodeStatustext({ severity: 6, text: t.armed ? 'Armed' : 'Disarmed' }));
+    lastArmed = t.armed;
+  }
+  if ((t.mode === 'AUTO' || t.mode === 'MANUAL') && t.mode !== lastMode) {
+    if (lastMode !== null) send(encodeStatustext({ severity: 6, text: `Mode: ${t.mode}` }));
+    lastMode = t.mode;
+  }
+  if (!!t.navDegraded !== lastDegraded) {
+    send(encodeStatustext({ severity: t.navDegraded ? 4 : 6, text: t.navDegraded ? 'Nav degraded: GPS rejected' : 'Nav recovered' }));
+    lastDegraded = !!t.navDegraded;
+  }
+}
 
 // ---------- SSE channel (bridge → browser) ----------
 
@@ -385,6 +424,13 @@ function relayTelemetry(t) {
 
   // HILS sensor faults → SYS_STATUS health bits + STATUSTEXT (M5).
   if (t.faults) updateFaults(t.faults);
+
+  // Telemetry completeness (M6): real battery, EKF health, lifecycle notifications.
+  if (typeof t.battV === 'number') {
+    battery = { mV: Math.round(t.battV * 1000), cA: Math.round((t.battA || 0) * 100), pct: t.battPct ?? 100 };
+  }
+  ekf.degraded = !!t.navDegraded;
+  lifecycleNotify(t);
 
   // Sim coord → world geodetic.
   // Convention: sim +X = east, sim -Z = north, sim +Y = up.
