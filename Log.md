@@ -214,3 +214,23 @@ Append one entry per loop (format in CLAUDE.md §5). Newest at the bottom.
   few frames integrate); that's why the suite uses the deterministic __advance path. Manual
   axis feel must be eyeballed on the Mac. Discrete toggles (B/M/N) ARE headless-verifiable
   and pass.
+
+## 2026-06-25 — controls: IME-safe key handling (Hangul broke R/M/N/B/WASD)
+
+**Status**: GREEN (198 unit incl. +1 keyToken, autoland PASS, IME simulated B/M verified)
+**Files changed**: src/controls.js, src/main.js, tests/controls.test.mjs
+**Root cause**: keyboard matched on `e.key.toLowerCase()`. With a Korean (Hangul) IME
+active, e.key arrives as 'Process'/a jamo, so every LETTER key (R/M/N/B and WASD/QE) was
+silently dropped, while ARROW keys (never composed by the IME) kept working. That is
+exactly the reported symptom: arrows flew/rolled the jet, but R/M/N/B did nothing.
+**Decisions**:
+- New `keyToken(e)` reads the PHYSICAL key via `e.code` (KeyW→'w', ArrowLeft→'arrowleft',
+  Digit→n), falling back to e.key only when e.code is absent. down()/up() now use it.
+- main.js 'B' (cinematic) listener matched the same way (`e.code === 'KeyB'`).
+- TDD: RED→GREEN with an IME case (`{code:'KeyR', key:'Process'} → 'r'`). Verified
+  end-to-end headless by dispatching synthetic IME keydowns — B and M now fire.
+**Next**:
+- M4 (parameters) — PARAM_REQUEST_LIST / PARAM_SET.
+**Notes**:
+- User workaround no longer needed, but for the record: pressing 한/영 to English also fixes
+  it. The e.code fix means flying works regardless of IME state.

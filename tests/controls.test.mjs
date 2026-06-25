@@ -3,9 +3,22 @@
 // expo curve must soften the mid-range. Analog/AP axes must not be clobbered.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createControlState, tickControls, expoShape, CONTROL_FEEL, axesFromKeys } from '../src/controls.js';
+import { createControlState, tickControls, expoShape, CONTROL_FEEL, axesFromKeys, keyToken } from '../src/controls.js';
 
 const DT = 1 / 60;
+
+test('keyToken keys off physical e.code so a Hangul IME does not swallow letters', () => {
+  // With the Korean IME active, e.key arrives as "Process" (or a Hangul jamo) but
+  // e.code stays the physical key — that is why WASD/R/M/N/B died while arrows worked.
+  assert.equal(keyToken({ code: 'KeyR', key: 'Process' }), 'r');
+  assert.equal(keyToken({ code: 'KeyW', key: 'ㅈ' }), 'w');
+  assert.equal(keyToken({ code: 'KeyB', key: 'Process' }), 'b');
+  assert.equal(keyToken({ code: 'KeyM', key: 'ㅡ' }), 'm');
+  assert.equal(keyToken({ code: 'ArrowLeft', key: 'ArrowLeft' }), 'arrowleft');
+  assert.equal(keyToken({ code: 'ArrowUp', key: 'ArrowUp' }), 'arrowup');
+  // Fallback to e.key when code is absent (very old browsers / synthetic events).
+  assert.equal(keyToken({ code: '', key: 'M' }), 'm');
+});
 
 test('axesFromKeys maps WASD/QE to the right axes', () => {
   assert.deepEqual(axesFromKeys(new Set(['w'])), { pitch: 1, roll: 0, yaw: 0 });

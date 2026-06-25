@@ -347,7 +347,9 @@ if (typeof window !== 'undefined') {
   try { saved = localStorage.getItem('fs-engview') ?? '1'; } catch { /* */ }
   applyEngView(saved !== '0');
   window.addEventListener('keydown', (e) => {
-    if (e.key && e.key.toLowerCase() === 'b' && !e.repeat) applyEngView(!engView);
+    // Match the PHYSICAL key (IME-safe): with a Hangul IME active e.key === 'Process'.
+    const b = e.code === 'KeyB' || (e.key && e.key.toLowerCase() === 'b');
+    if (b && !e.repeat) applyEngView(!engView);
   });
 }
 

@@ -36,11 +36,24 @@ export function createControlState() {
   };
 }
 
+// Normalise a keyboard event to a layout/IME-independent token off the PHYSICAL key
+// (e.code). Critical for Korean (and other IME) users: with Hangul active, e.key
+// arrives as 'Process'/a jamo, so e.key-based matching silently drops WASD/R/M/N/B
+// while arrows (which the IME never composes) keep working. e.code does not compose.
+//   KeyW → 'w' · ArrowLeft → 'arrowleft' · Digit1 → '1' · (fallback) e.key lowercased.
+export function keyToken(e) {
+  const c = e.code || '';
+  if (c.startsWith('Key')) return c.slice(3).toLowerCase();   // KeyW → w
+  if (c.startsWith('Arrow')) return c.toLowerCase();          // ArrowLeft → arrowleft
+  if (c.startsWith('Digit')) return c.slice(5);               // Digit1 → 1
+  return (e.key || '').toLowerCase();                         // older browsers / synthetic
+}
+
 export function attachKeyboard(state) {
   const keys = new Set();
 
   function down(e) {
-    const k = e.key.toLowerCase();
+    const k = keyToken(e);
     if (keys.has(k)) return; // ignore auto-repeat for one-shot keys
     keys.add(k);
 
@@ -64,7 +77,7 @@ export function attachKeyboard(state) {
     // Throttle is integrated over time, but we also want a tiny instant nudge.
   }
   function up(e) {
-    keys.delete(e.key.toLowerCase());
+    keys.delete(keyToken(e));
     updateAxes(state, keys);
   }
 
