@@ -202,36 +202,70 @@ const camera = new THREE.PerspectiveCamera(
 // "Unreal-grade" look — afterburner, sun glare, nav lights, bright HUD. Falls
 // back to a plain render if the example scripts didn't load (offline/headless).
 let composer = null, bloomPass = null;
+let ssaoPass = null, smaaPass = null;
 (function setupComposer() {
-  if (!THREE.EffectComposer || !THREE.RenderPass || !THREE.UnrealBloomPass) {
+  if (!THREE.EffectComposer || !THREE.RenderPass) {
     console.warn('[gfx] post-processing unavailable — using direct render');
     return;
   }
   try {
+    const w = window.innerWidth, h = window.innerHeight;
     composer = new THREE.EffectComposer(renderer);
-    composer.addPass(new THREE.RenderPass(scene, camera));
-    bloomPass = new THREE.UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.35,  // strength — subtle
-      0.4,   // radius
-      0.92,  // threshold — only the SUN / afterburner / nav lights bloom, not the
-             // bright scene (otherwise the whole frame hazes over)
-    );
-    composer.addPass(bloomPass);
-    // The composer's render targets are LINEAR, so render the scene linear (tone-
-    // mapping is still applied in the materials) and convert to sRGB in a final
-    // gamma pass. Without this the whole frame washes out (double/!sRGB encoding).
+    // Scene render: SSAOPass when available (it renders the scene + ambient occlusion;
+    // toggle AO on/off via its output mode), else a plain RenderPass.
+    if (THREE.SSAOPass) {
+      ssaoPass = new THREE.SSAOPass(scene, camera, w, h);
+      ssaoPass.kernelRadius = 10;
+      ssaoPass.minDistance = 0.0015;
+      ssaoPass.maxDistance = 0.10;
+      ssaoPass.output = THREE.SSAOPass.OUTPUT.Beauty;   // start in eng view: no AO
+      composer.addPass(ssaoPass);
+    } else {
+      composer.addPass(new THREE.RenderPass(scene, camera));
+    }
+    if (THREE.UnrealBloomPass) {
+      bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(w, h),
+        0.0,    // strength (off in eng; raised in cinematic by applyEngView)
+        0.5,    // radius
+        0.85);  // threshold — sun / bright highlights bloom
+      composer.addPass(bloomPass);
+    }
+    if (THREE.SMAAPass) {
+      const dpr = Math.min(window.devicePixelRatio, 2);
+      smaaPass = new THREE.SMAAPass(w * dpr, h * dpr);   // crisp edge AA
+      composer.addPass(smaaPass);
+    }
+    // Composer render targets are LINEAR; convert to sRGB in a final gamma pass.
     renderer.outputEncoding = THREE.LinearEncoding;
     if (THREE.GammaCorrectionShader) {
       composer.addPass(new THREE.ShaderPass(THREE.GammaCorrectionShader));
     }
-    composer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(w, h);
     composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   } catch (e) {
     console.warn('[gfx] composer setup failed:', e && e.message);
     composer = null;
   }
 })();
+
+// Atmospheric sky (Sky.js, Rayleigh/Mie scattering) for the cinematic view. Shown
+// only in cinematic; the flat gradient sky (world.sky) shows in engineering view.
+let skyDome = null;
+if (THREE.Sky) {
+  try {
+    skyDome = new THREE.Sky();
+    skyDome.scale.setScalar(10000);
+    const u = skyDome.material.uniforms;
+    u.turbidity.value = 4;
+    u.rayleigh.value = 1.6;
+    u.mieCoefficient.value = 0.005;
+    u.mieDirectionalG.value = 0.8;
+    const sd = (sunLight && sunLight.userData.dir) ? sunLight.userData.dir : new THREE.Vector3(0.55, 0.6, -0.35).normalize();
+    u.sunPosition.value.copy(sd).multiplyScalar(1000);
+    skyDome.visible = false;
+    scene.add(skyDome);
+  } catch (e) { console.warn('[gfx] sky unavailable:', e && e.message); skyDome = null; }
+}
 
 // Re-centre the sun's tight shadow frustum on the aircraft so shadows stay crisp.
 const _sunFollow = new THREE.Vector3();
@@ -284,13 +318,22 @@ const eng = (typeof document !== 'undefined') ? initEngineering({
 let engView = true;
 function applyEngView(on) {
   engView = !!on;
-  if (bloomPass) bloomPass.strength = on ? 0.0 : 0.35;
+  // Cinematic view ('B' off): atmospheric sky + bloom + SSAO + filmic tonemapping +
+  // stronger image-based reflections. Engineering view: flat, fast, data-first.
+  if (bloomPass) bloomPass.strength = on ? 0.0 : 0.6;
+  if (ssaoPass && THREE.SSAOPass) ssaoPass.output = on ? THREE.SSAOPass.OUTPUT.Beauty : THREE.SSAOPass.OUTPUT.Default;
+  if (skyDome) skyDome.visible = !on;                 // atmospheric sky in cinematic
+  if (world && world.sky) world.sky.visible = on;     // flat gradient sky in eng
   renderer.toneMapping = on ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = on ? 1.0 : 1.15;
-  // toneMapping is a shader #define → recompile materials so the change takes hold.
+  renderer.toneMappingExposure = on ? 1.0 : 0.5;       // Sky.js is HDR — ACES wants ~0.5
+  const envI = on ? 0.7 : 1.4;                         // boost reflections in cinematic
+  // toneMapping is a shader #define → recompile materials; also retune envMapIntensity.
   scene.traverse((o) => {
     if (!o.material) return;
-    (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; });
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+      if ('envMapIntensity' in m) m.envMapIntensity = envI;
+      m.needsUpdate = true;
+    });
   });
   refGrid.visible = on; worldAxes.visible = on; bodyAxes.visible = on;
   if (eng) eng.setVisible(on);

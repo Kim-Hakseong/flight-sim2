@@ -310,7 +310,7 @@ export function buildWorld(scene, colliders, mapKey = DEFAULT_MAP) {
   const content = buildMapContent(group, colliders, cfg, sunDir);
   scene.add(group);
 
-  return { sun, hemi, fill, sunDir, group, water: content.water, skyMat: content.skyMat, env: cfg.env, mapKey };
+  return { sun, hemi, fill, sunDir, group, water: content.water, skyMat: content.skyMat, sky: content.sky, env: cfg.env, mapKey };
 }
 
 // Build the swappable scenery for a map into `group`. Returns { water } (the
@@ -328,7 +328,7 @@ export function buildMapContent(group, colliders, cfg, sunDir) {
   buildRunway(group);
   if (cfg.buildings > 0) buildBuildings(group, colliders, cfg.buildings);
   buildMountains(group, colliders, cfg.mountains.count, cfg.mountains.rock);
-  return { water, skyMat: skyMesh.material };
+  return { water, skyMat: skyMesh.material, sky: skyMesh };
 }
 
 // Time-of-day / weather presets (M37). Each layers ON TOP of the map's biome:

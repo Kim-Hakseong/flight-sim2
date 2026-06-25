@@ -171,3 +171,24 @@ Append one entry per loop (format in CLAUDE.md §5). Newest at the bottom.
 - Graphics quality options (no Unreal/Unity) — proposed to the user.
 **Notes**:
 - Audio still starts on first user gesture (browser policy); 'X' mutes.
+
+## 2026-06-25 — graphics: high-quality cinematic view (sky + SSAO + SMAA + IBL)
+
+**Status**: GREEN (cinematic post-FX stack; eng default unchanged; 195 tests, console 0, autoland PASS)
+**Files changed**: index.html (Sky/SSAO/SMAA + SMAAShader scripts), src/main.js (composer rebuild + atmospheric sky + applyEngView toggles), src/world.js (expose sky mesh)
+**Decisions**:
+- Without Unreal/Unity, boosted the **cinematic view ('B' off)** with a Three.js post-FX
+  stack — engineering view stays flat/fast/data-first:
+  - **Atmospheric sky** (Sky.js, Rayleigh/Mie) shown in cinematic; the flat gradient sky
+    shows in eng. ACES exposure 0.5 (Sky.js is HDR — high exposure washed it out).
+  - **SSAO** (SSAOPass; AO via output mode — Beauty in eng, Default in cinematic).
+  - **SMAA** edge AA (needs SMAAShader.js — that omission broke the composer until added).
+  - **Bloom** 0.6 + **IBL**: envMapIntensity 1.4 in cinematic for stronger reflections.
+- Honest limit: the procedural terrain/mountains are low-poly flat-shaded, so post-FX is a
+  real but bounded bump. The next-level jump needs better geometry/textures (asset work),
+  not more post-FX.
+**Next**:
+- (option) higher-detail terrain + PBR textures/normal maps for a bigger visual jump; else M4.
+**Notes**:
+- 'B' toggles cinematic ↔ engineering. Graphics degrade gracefully if the example scripts
+  fail to load (falls back to RenderPass / gradient sky).
