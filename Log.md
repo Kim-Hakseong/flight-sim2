@@ -192,3 +192,25 @@ Append one entry per loop (format in CLAUDE.md §5). Newest at the bottom.
 **Notes**:
 - 'B' toggles cinematic ↔ engineering. Graphics degrade gracefully if the example scripts
   fail to load (falls back to RenderPass / gradient sky).
+
+## 2026-06-25 — controls: ←/→ roll, real manual↔auto toggle (N/M), key legend
+
+**Status**: GREEN (197 unit incl. +2 controls, console 0, autoland PASS, B/M/N verified headless)
+**Files changed**: src/controls.js, src/main.js, index.html, tests/controls.test.mjs
+**Decisions** (user reported "A/D·←/→·N/M·B 안 먹힘"):
+- Diagnosed: B works (verified true→false), and W/S/A/D share one path (tickControls) —
+  A/D roll *does* work but is invisible on the runway (gear holds wings level). The real
+  gaps were: ←/→ unmapped, and N/M = mission start/abort (dead without a QGC plan), which
+  the user expected to be a manual/auto toggle.
+- ←/→ now alias A/D (roll) via a new pure `axesFromKeys(keys)` (TDD: RED→GREEN). ↑/↓ stay
+  throttle-only.
+- M = AUTO: flies the uploaded plan, or auto-loads the built-in demo circuit so AUTO works
+  without QGC. N = MANUAL (release autopilot). The HUD MODE cell reflects it.
+- Updated the on-screen key legend (added ←/→, B, reworded M/N).
+**Next**:
+- M4 (parameters) — PARAM_REQUEST_LIST / PARAM_SET for GCS gain tuning.
+**Notes**:
+- Real-time manual flight can't be tested headless (background RAF is throttled → only a
+  few frames integrate); that's why the suite uses the deterministic __advance path. Manual
+  axis feel must be eyeballed on the Mac. Discrete toggles (B/M/N) ARE headless-verifiable
+  and pass.

@@ -633,12 +633,16 @@ if (typeof window !== 'undefined') {
 controls.onReset = () => resetAircraft();
 controls.onCameraToggle = () => nextMode(camRig);
 controls.onMissionStart = () => {
-  if (autopilot.hasMission()) {
-    autopilot.startMission();
-    console.log('[sim] mission started locally (M key)');
-  } else {
-    console.log('[sim] no mission loaded — upload a plan from QGC first');
+  // M = engage AUTO. Fly the uploaded plan if there is one; otherwise fall back to
+  // the built-in demo circuit so AUTO always *does* something without QGC. Paired
+  // with N (MANUAL) this is the manual↔auto toggle the MODE cell reflects.
+  if (!autopilot.hasMission()) {
+    const m = buildDemoMission(HOME);
+    autopilot.setMission(m.items, m.home);
+    console.log(`[sim] no plan uploaded — loaded built-in demo (${m.items.length} wp)`);
   }
+  autopilot.startMission();
+  console.log(`[sim] AUTO engaged (M) — flying on '${navSource}' nav`);
 };
 controls.onDemoMission = () => {
   // Load + start the built-in circuit so AUTO mode is flyable without QGC (K key).
@@ -649,9 +653,12 @@ controls.onDemoMission = () => {
 };
 if (typeof window !== 'undefined') window.loadDemoMission = () => controls.onDemoMission();
 controls.onMissionAbort = () => {
+  // N = back to MANUAL (hand control to the keyboard).
   if (autopilot.isActive()) {
     autopilot.abort();
-    console.log('[sim] mission aborted (N key)');
+    console.log('[sim] MANUAL (N) — autopilot released, keyboard has control');
+  } else {
+    console.log('[sim] already MANUAL');
   }
 };
 controls.onRecToggle = () => {

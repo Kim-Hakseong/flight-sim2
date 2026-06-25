@@ -2,8 +2,8 @@
 // COORDINATE: Three.js right-handed, +Y up, -Z forward.
 // Body frame: +X right wing, +Y top, -Z nose.
 //
-// W/S = pitch, A/D = roll, Q/E = yaw, ↑/↓ = throttle,
-// R = reset, V = camera, P = pause.
+// W/S = pitch, A/D or ←/→ = roll, Q/E = yaw, ↑/↓ = throttle,
+// R = reset, V = camera, P = pause, M = AUTO, N = MANUAL.
 
 export function createControlState() {
   return {
@@ -80,18 +80,22 @@ export function attachKeyboard(state) {
   };
 }
 
-function updateAxes(state, keys) {
+// Pure: a Set of lowercased keys → the bang-bang axis target. ←/→ alias A/D so the
+// arrow cluster also banks (↑/↓ stay throttle, handled in tickThrottle — not here).
+export function axesFromKeys(keys) {
   let pitch = 0, roll = 0, yaw = 0;
   if (keys.has('w')) pitch += 1;
   if (keys.has('s')) pitch -= 1;
-  if (keys.has('d')) roll += 1;
-  if (keys.has('a')) roll -= 1;
+  if (keys.has('d') || keys.has('arrowright')) roll += 1;
+  if (keys.has('a') || keys.has('arrowleft'))  roll -= 1;
   if (keys.has('e')) yaw += 1;
   if (keys.has('q')) yaw -= 1;
+  return { pitch, roll, yaw };
+}
+
+function updateAxes(state, keys) {
   // Set the key TARGET; tickControls() ramps the actual command toward it.
-  state._kbTarget.pitch = pitch;
-  state._kbTarget.roll = roll;
-  state._kbTarget.yaw = yaw;
+  Object.assign(state._kbTarget, axesFromKeys(keys));
 }
 
 // Keyboard input feel (M42). The raw key axis is bang-bang (±1 the instant a key

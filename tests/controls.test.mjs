@@ -3,9 +3,26 @@
 // expo curve must soften the mid-range. Analog/AP axes must not be clobbered.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createControlState, tickControls, expoShape, CONTROL_FEEL } from '../src/controls.js';
+import { createControlState, tickControls, expoShape, CONTROL_FEEL, axesFromKeys } from '../src/controls.js';
 
 const DT = 1 / 60;
+
+test('axesFromKeys maps WASD/QE to the right axes', () => {
+  assert.deepEqual(axesFromKeys(new Set(['w'])), { pitch: 1, roll: 0, yaw: 0 });
+  assert.deepEqual(axesFromKeys(new Set(['s'])), { pitch: -1, roll: 0, yaw: 0 });
+  assert.deepEqual(axesFromKeys(new Set(['d'])), { pitch: 0, roll: 1, yaw: 0 });
+  assert.deepEqual(axesFromKeys(new Set(['a'])), { pitch: 0, roll: -1, yaw: 0 });
+  assert.deepEqual(axesFromKeys(new Set(['e'])), { pitch: 0, roll: 0, yaw: 1 });
+  assert.deepEqual(axesFromKeys(new Set(['q'])), { pitch: 0, roll: 0, yaw: -1 });
+});
+
+test('arrow ←/→ are roll aliases (so the arrow cluster also banks)', () => {
+  assert.equal(axesFromKeys(new Set(['arrowright'])).roll, 1, '→ rolls right like D');
+  assert.equal(axesFromKeys(new Set(['arrowleft'])).roll, -1, '← rolls left like A');
+  // ↑/↓ stay throttle-only — they must NOT touch the pitch/roll/yaw axes.
+  assert.deepEqual(axesFromKeys(new Set(['arrowup'])), { pitch: 0, roll: 0, yaw: 0 });
+  assert.deepEqual(axesFromKeys(new Set(['arrowdown'])), { pitch: 0, roll: 0, yaw: 0 });
+});
 
 test('expoShape softens mid-range but keeps the stops at full', () => {
   assert.equal(expoShape(0, 0.55), 0);
