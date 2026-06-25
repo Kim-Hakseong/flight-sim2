@@ -213,7 +213,7 @@ function buildWater(parent, cfg, sunDir) {
 // Flat sand island that carries the runway on an ocean map.
 function buildIsland(parent, radius) {
   const geo = new THREE.CircleGeometry(radius, 48);
-  const mat = new THREE.MeshLambertMaterial({ color: 0xcdc09a, map: groundDetailTexture() });
+  const mat = new THREE.MeshStandardMaterial({ color: 0xcdc09a, map: groundDetailTexture(), normalMap: proceduralNormalTexture(256, 1.2), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95, metalness: 0.0 });
   const isle = new THREE.Mesh(geo, mat);
   isle.rotation.x = -Math.PI / 2;
   isle.position.y = 0.0;
@@ -393,6 +393,50 @@ function groundDetailTexture() {
   return t;
 }
 
+// Tileable procedural NORMAL map for surface micro-relief (M46 lean-graphics jump).
+// Builds a value-noise heightfield then encodes its gradient as an RGB normal map, so
+// the PBR materials catch real per-pixel shading from the cinematic sun/IBL instead of
+// reading as flat sheets. Uses its OWN seeded RNG so it never perturbs the shared world
+// RNG stream — the obstacle layout (and the deterministic autoland) stays byte-identical.
+function proceduralNormalTexture(N = 256, strength = 1.4, seed = 0x4ED90B) {
+  const nr = makeRng(seed);
+  const h = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) h[i] = nr();
+  // Box-blur a couple of times to turn white noise into smooth bumps.
+  const blur = (src) => {
+    const out = new Float32Array(N * N);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      let s = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        s += src[((y + dy + N) % N) * N + ((x + dx + N) % N)];
+      }
+      out[y * N + x] = s / 9;
+    }
+    return out;
+  };
+  let hf = blur(blur(h));
+  const c = document.createElement('canvas'); c.width = c.height = N;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(N, N);
+  const at = (x, y) => hf[((y + N) % N) * N + ((x + N) % N)];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    // Central-difference gradient → tangent-space normal (wrapping for seamless tiling).
+    const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+    const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+    const len = Math.hypot(dx, dy, 1);
+    const i = (y * N + x) * 4;
+    img.data[i]     = Math.round((-dx / len * 0.5 + 0.5) * 255);
+    img.data[i + 1] = Math.round((-dy / len * 0.5 + 0.5) * 255);
+    img.data[i + 2] = Math.round((1 / len * 0.5 + 0.5) * 255);
+    img.data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(60, 60);
+  return t;
+}
+
 function buildGround(scene, terrain = {}) {
   // Multi-octave fractal noise + altitude-banded vertex colors.
   const seg = 140;
@@ -451,8 +495,15 @@ function buildGround(scene, terrain = {}) {
 
   // A subtle procedural detail texture (canvas value-noise) breaks up the flat
   // vertex-coloured terrain so it reads as ground rather than a solid sheet (M31).
+  // PBR + a procedural normal map (M46): the terrain now responds to the cinematic
+  // sun/IBL/SSAO with real per-pixel relief instead of flat Lambert shading.
   const detail = groundDetailTexture();
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: detail });
+  const mat = new THREE.MeshStandardMaterial({
+    vertexColors: true, map: detail,
+    normalMap: proceduralNormalTexture(256, 1.6),
+    normalScale: new THREE.Vector2(0.8, 0.8),
+    roughness: 0.97, metalness: 0.0,
+  });
   const ground = new THREE.Mesh(geom, mat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
@@ -460,10 +511,13 @@ function buildGround(scene, terrain = {}) {
 }
 
 function buildRunway(scene) {
-  // Asphalt strip + shoulders.
+  // Asphalt strip + shoulders — PBR with a fine asphalt normal map (M46) so the
+  // surface catches grazing sun/IBL highlights instead of reading dead-flat.
+  const asphaltN = proceduralNormalTexture(256, 0.8, 0x9A1207);
+  asphaltN.repeat.set(8, 120);
   const shoulder = new THREE.Mesh(
     new THREE.PlaneGeometry(RUNWAY_WIDTH + 16, RUNWAY_LENGTH + 30),
-    new THREE.MeshLambertMaterial({ color: 0x33342d }),
+    new THREE.MeshStandardMaterial({ color: 0x33342d, normalMap: asphaltN, normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.95, metalness: 0.0 }),
   );
   shoulder.rotation.x = -Math.PI / 2;
   shoulder.position.set(0, 0.04, 0);
@@ -472,7 +526,7 @@ function buildRunway(scene) {
 
   const runway = new THREE.Mesh(
     new THREE.PlaneGeometry(RUNWAY_WIDTH, RUNWAY_LENGTH),
-    new THREE.MeshLambertMaterial({ color: 0x1a1c1f }),
+    new THREE.MeshStandardMaterial({ color: 0x1a1c1f, normalMap: asphaltN, normalScale: new THREE.Vector2(0.35, 0.35), roughness: 0.8, metalness: 0.0 }),
   );
   runway.rotation.x = -Math.PI / 2;
   runway.position.set(0, 0.05, 0);
@@ -527,7 +581,11 @@ function buildBuildings(scene, colliders, count) {
     const d = isTower ? 14 + rnd() * 12 : 18 + rnd() * 40;
     const h = isTower ? 90 + rnd() * 180 : 22 + rnd() * 110;
     const color = palette[Math.floor(rnd() * palette.length)];
-    const m = new THREE.Mesh(cubeGeom, new THREE.MeshLambertMaterial({ color }));
+    // PBR (M46): towers are smoother/slightly metallic so the IBL gives them a
+    // glassy facade sheen; low boxes stay matte concrete.
+    const m = new THREE.Mesh(cubeGeom, new THREE.MeshStandardMaterial({
+      color, roughness: isTower ? 0.35 : 0.8, metalness: isTower ? 0.35 : 0.05,
+    }));
     m.scale.set(w, h, d);
 
     const side = rnd() < 0.5 ? -1 : 1;
@@ -555,15 +613,37 @@ function buildBuildings(scene, colliders, count) {
   }
 }
 
+// A unit cone (base radius 1, height 1, apex at +Y) roughened into a craggy peak by
+// deterministic per-vertex noise — uses its OWN seeded RNG so the shared world stream
+// (and the autoland) is untouched. Radial/height resolution is bumped well past the old
+// 7-sided cone so ridgelines read as rock, not a tent.
+function makeCraggyCone(seed) {
+  const geo = new THREE.ConeGeometry(1, 1, 14, 6);
+  const nr = makeRng(seed);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const apex = y > 0.45;                          // keep the very tip sharp
+    const radial = apex ? 0.04 : 0.16;              // displace flanks more than the tip
+    const j = (nr() - 0.5) * radial;
+    pos.setX(i, x + x * j + (nr() - 0.5) * 0.05);
+    pos.setZ(i, z + z * j + (nr() - 0.5) * 0.05);
+    pos.setY(i, y + (nr() - 0.5) * 0.03);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
 function buildMountains(scene, colliders, count, rockColor = 0x5a4a3a) {
-  const baseGeom = new THREE.ConeGeometry(1, 1, 7);
-  const matRock = new THREE.MeshLambertMaterial({ color: rockColor });
-  const matSnow = new THREE.MeshLambertMaterial({ color: 0xeaeaea });
+  // A few craggy variants (deterministic), picked by index for silhouette variety.
+  const variants = [makeCraggyCone(0xA1), makeCraggyCone(0xB2), makeCraggyCone(0xC3), makeCraggyCone(0xD4)];
+  const matRock = new THREE.MeshStandardMaterial({ color: rockColor, roughness: 0.96, metalness: 0.02, flatShading: true });
+  const matSnow = new THREE.MeshStandardMaterial({ color: 0xeaeaea, roughness: 0.85, metalness: 0.0, flatShading: true });
 
   for (let i = 0; i < count; i++) {
     const r = 250 + rnd() * 500;
     const h = 500 + rnd() * 900;
-    const m = new THREE.Mesh(baseGeom, matRock);
+    const m = new THREE.Mesh(variants[i % variants.length], matRock);
     m.scale.set(r, h, r);
 
     // Re-roll the position until it clears the approach corridor (bounded, so the
@@ -584,7 +664,7 @@ function buildMountains(scene, colliders, count, rockColor = 0x5a4a3a) {
 
     // Snowcap on the tallest peaks.
     if (h > 800) {
-      const snow = new THREE.Mesh(baseGeom, matSnow);
+      const snow = new THREE.Mesh(variants[(i + 1) % variants.length], matSnow);
       const sh = h * 0.25;
       const sr = r * 0.3;
       snow.scale.set(sr, sh, sr);

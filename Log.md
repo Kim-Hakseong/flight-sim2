@@ -266,3 +266,27 @@ exactly the reported symptom: arrows flew/rolled the jet, but R/M/N/B did nothin
   predates M4 and hits all SSE events equally. Added link-online wait + idempotent re-send
   retries to reduce it; not 100% in headless. Local QGC tuning to verify against a real GCS.
 - Tune locally without a GCS: window.__params.list() / .set('AP_TGT_SPEED', 70).
+
+## 2026-06-25 — M46: lean graphics jump (world → PBR + normal maps + craggy peaks)
+
+**Status**: GREEN (no binary assets; 211 unit, console 0, autoland PASS)
+**Files changed**: src/world.js
+**Decisions** (user: "지금 상태에서 할 수 있는 최대한의 린 그래픽 점프"):
+- The earlier cinematic post-FX (IBL/SSAO/bloom/ACES) was largely WASTED: the whole
+  world used MeshLambertMaterial, which ignores roughness/metalness and scene.environment.
+  Converted ground, runway, buildings, mountains, island → **MeshStandardMaterial**, so the
+  existing PMREM IBL + cinematic sun/SSAO/bloom now actually shade them.
+- Added a **procedural tiling normal map** (canvas value-noise → gradient-encoded) for the
+  terrain/asphalt/island so surfaces catch grazing-light micro-relief instead of reading flat.
+- **Craggier mountains**: the 7-sided cones are now 14×6 cones displaced by deterministic
+  per-vertex noise (flat-shaded), with 4 silhouette variants — rock, not tents.
+- Towers got low roughness + metalness so the IBL gives a glassy facade sheen.
+- DETERMINISM: every new texture/geometry RNG uses its OWN seed (makeRng) — the shared
+  world-layout stream (buildings/mountains positions) is untouched, so the obstacle field and
+  the crosswind autoland are byte-identical (verified: same finalAbsX).
+**Next**:
+- A bigger jump now needs ASSET work (glTF aircraft + real PBR texture/normal tiles), which
+  adds binary files and drifts from the lean GCS focus — deferred unless requested.
+**Notes**:
+- Headless SwiftShader (software GL) under-renders IBL/SSAO/normal maps/bloom, so the gain
+  shows on a real GPU, not in the CI screenshots. Toggle with 'B'.
