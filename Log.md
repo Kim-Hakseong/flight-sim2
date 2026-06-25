@@ -1,3 +1,32 @@
+---
+project: Flight Sim2
+stage: MVP
+progress: 55
+repo_url: https://github.com/Kim-Hakseong/flight-sim2
+demo_url: https://kim-hakseong.github.io/flight-sim2/
+summary: 브라우저 비행 시뮬레이터 기반 MAVLink 지상관제(GCS) 루프 — QGroundControl 연동(텔레메트리↑·미션/명령↓·GUIDED/TAKEOFF/LAND/RTL), 6-DOF·센서·HITL/SIL 벤치
+---
+
+## 마일스톤
+- [x] GCS-first 린 리셋 (게임 요소 제거, MAVLink 루프에 집중)
+- [x] GCS 루프 종단 검증 (텔레메트리↑ · 미션/명령↓)
+- [x] faithful 모드 + arm (GCS가 기체 상태 관측·제어)
+- [x] GCS 내비 명령 — GUIDED go-to / TAKEOFF / LAND / RTL
+- [ ] 파라미터 (PARAM_REQUEST_LIST / PARAM_SET — GCS에서 게인 read/tune)
+
+## 2026-06-25
+- M3: GCS 내비 명령 완성 — GUIDED go-to + TAKEOFF/LAND/RTL (QGC 실연 확인, 195 unit PASS)
+- M2b: 린 GCS 빌드를 flight-sim2 repo로 통합 (단일 배포 유지)
+
+## 2026-06-24
+- M2: faithful 모드 + arm — GCS가 기체 상태를 관측·제어
+- M1: GCS 루프 종단 검증 (텔레메트리↑ · 미션/명령↓)
+- M0: GCS-first 린 리셋 (게임 요소 제거, MAVLink 루프에 집중)
+
+---
+
+<!-- 위 블록은 dev-dashboard(SSOT) 집계용 frontmatter. 아래는 프로젝트 원본 빌드 로그. -->
+
 # Log — flight-sim2
 
 Append one entry per loop (format in CLAUDE.md §5). Newest at the bottom.
